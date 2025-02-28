@@ -1,40 +1,62 @@
-# config/config.py
-"""1. Configuration Module"""
+"""Configuration Module for LLM-Enhanced Test Generator"""
 
 import os
+from typing import List, Optional
+from dataclasses import dataclass, field
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
+@dataclass
 class Config:
-    # Base application settings
-    BASE_URL = os.getenv("BASE_URL", "https://example.com")
+    # Application settings
+    BASE_URL: str = os.getenv("BASE_URL", "")
+    APP_NAME: str = os.getenv("APP_NAME", "web_app")
+    OUTPUT_DIR: str = os.getenv("OUTPUT_DIR", "output")
+    DEBUG_MODE: bool = os.getenv("DEBUG_MODE", "False").lower() == "true"
 
     # Authentication settings
-    AUTH_TYPE = os.getenv("AUTH_TYPE", "basic")  # Options: basic, ntlm, okta
-    USERNAME = os.getenv("USERNAME")
-    PASSWORD = os.getenv("PASSWORD")
-    OKTA_URL = os.getenv("OKTA_URL")
-
-    # Crawler settings
-    MAX_DEPTH = int(os.getenv("MAX_DEPTH", 3))
-    EXCLUDE_PATTERNS = os.getenv("EXCLUDE_PATTERNS", "logout,#,javascript:").split(",")
-    INCLUDE_SUBDOMAINS = os.getenv("INCLUDE_SUBDOMAINS", "True").lower() == "true"
-
-    # Selenium settings
-    BROWSER = os.getenv("BROWSER", "chrome")
-    HEADLESS = os.getenv("HEADLESS", "True").lower() == "true"
-    IMPLICIT_WAIT = int(os.getenv("IMPLICIT_WAIT", 10))
-    PAGE_LOAD_TIMEOUT = int(os.getenv("PAGE_LOAD_TIMEOUT", 30))
+    AUTH_TYPE: str = os.getenv("AUTH_TYPE", "none")
+    USERNAME: str = os.getenv("USERNAME", "")
+    PASSWORD: str = os.getenv("PASSWORD", "")
+    AUTH_CONFIG: dict = field(default_factory=lambda: {
+        "username": os.getenv("USERNAME", ""),
+        "password": os.getenv("PASSWORD", ""),
+        "token_url": os.getenv("TOKEN_URL", ""),
+        "client_id": os.getenv("CLIENT_ID", ""),
+        "client_secret": os.getenv("CLIENT_SECRET", ""),
+    })
 
     # LLM settings
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-    LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-4")
+    LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.7"))
+    LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "2000"))
 
-    # Output settings
-    OUTPUT_DIR = os.getenv("OUTPUT_DIR", "output")
-    CUCUMBER_TEMPLATE_DIR = os.getenv("CUCUMBER_TEMPLATE_DIR", "templates/cucumber")
+    # Crawler settings
+    MAX_DEPTH: int = int(os.getenv("MAX_DEPTH", "3"))
+    EXCLUDE_PATTERNS: List[str] = field(
+        default_factory=lambda: os.getenv("EXCLUDE_PATTERNS", "logout,#,javascript:").split(",")
+    )
+    INCLUDE_SUBDOMAINS: bool = os.getenv("INCLUDE_SUBDOMAINS", "False").lower() == "true"
+    REQUEST_DELAY: float = float(os.getenv("REQUEST_DELAY", "0.5"))
 
-    # Report settings
-    REPORT_FORMAT = os.getenv("REPORT_FORMAT", "html")
+    # Browser settings
+    BROWSER: str = os.getenv("BROWSER", "chrome")
+    HEADLESS: bool = os.getenv("HEADLESS", "True").lower() == "true"
+    IMPLICIT_WAIT: int = int(os.getenv("IMPLICIT_WAIT", "10"))
+    PAGE_LOAD_TIMEOUT: int = int(os.getenv("PAGE_LOAD_TIMEOUT", "30"))
+    BROWSER_OPTIONS: List[str] = field(default_factory=lambda: [
+        "--headless" if os.getenv("HEADLESS", "True").lower() == "true" else "",
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--window-size=1920,1080"
+    ])
+
+    def validate(self) -> bool:
+        """Validate required configuration settings."""
+        if not self.OPENAI_API_KEY:
+            raise ValueError("OPENAI_API_KEY is required for test generation")
+        if not self.BASE_URL:
+            raise ValueError("BASE_URL is required")
+        return True

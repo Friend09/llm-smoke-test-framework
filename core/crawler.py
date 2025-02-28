@@ -9,11 +9,14 @@ import time
 import logging
 import urllib.parse
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.options import Options as ChromeOptions
+from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException
+from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.firefox import GeckoDriverManager
 
 from config.config import Config
 from core.auth_handler import AuthHandler
@@ -29,42 +32,44 @@ class WebCrawler:
     in a web application, handling authentication as needed.
     """
 
-    def __init__(self, start_url=None, config=None):
-        """
-        Initialize the crawler.
-
-        Args:
-            start_url (str): URL to start crawling from
-            config (Config): Configuration object
-        """
-        self.config = config or Config()
-        self.start_url = start_url or self.config.BASE_URL
+    def __init__(self, base_url: str, config: Config):
+        """Initialize the WebCrawler with base URL and configuration."""
+        self.base_url = base_url
+        self.config = config
         self.driver = None
-        self.auth_handler = None
         self.visited_urls = set()
-        self.url_queue = []
-        self.page_data = {}
+        self.page_data = {}  # Store page data
+        self.url_queue = []  # Queue for URLs to visit
         self.setup_driver()
 
     def setup_driver(self):
-        """Set up the Selenium WebDriver."""
-        if self.config.BROWSER.lower() == "chrome":
-            options = Options()
-            if self.config.HEADLESS:
-                options.add_argument("--headless")
-                options.add_argument("--disable-gpu")
-            options.add_argument("--window-size=1920,1080")
-            options.add_argument("--no-sandbox")
-            options.add_argument("--disable-dev-shm-usage")
+        """Configure and initialize the WebDriver"""
+        options = ChromeOptions()
+        if self.config.HEADLESS:
+            options.add_argument('--headless')
 
-            self.driver = webdriver.Chrome(options=options)
-        else:
-            # Support for other browsers can be added here
-            raise ValueError(f"Unsupported browser: {self.config.BROWSER}")
+        # Add any additional Chrome options from config
+        for option in self.config.BROWSER_OPTIONS:
+            if option:
+                options.add_argument(option)
 
-        # Set timeouts
-        self.driver.implicitly_wait(self.config.IMPLICIT_WAIT)
-        self.driver.set_page_load_timeout(self.config.PAGE_LOAD_TIMEOUT)
+        try:
+            self.driver = webdriver.Chrome(
+                service=webdriver.chrome.service.Service(
+                    ChromeDriverManager().install()
+                ),
+                options=options
+            )
+
+            # Set timeouts
+            self.driver.implicitly_wait(self.config.IMPLICIT_WAIT)
+            self.driver.set_page_load_timeout(self.config.PAGE_LOAD_TIMEOUT)
+
+            logger.debug("WebDriver initialized successfully")
+
+        except Exception as e:
+            logger.error(f"Failed to initialize WebDriver: {str(e)}")
+            raise
 
         # Initialize auth handler
         self.auth_handler = AuthHandler(self.driver)
@@ -81,64 +86,54 @@ class WebCrawler:
             dict: Discovered pages and their data
         """
         max_depth = max_depth or self.config.MAX_DEPTH
+        self.page_data = {}  # Reset page data
+        self.url_queue = []  # Reset URL queue
 
         try:
-            # Navigate to start URL
-            logger.info(f"Starting crawl at {self.start_url}")
-            self.driver.get(self.start_url)
+            logger.info(f"Starting crawl at {self.base_url}")
+            self.driver.get(self.base_url)
 
-            # Handle authentication if needed
             if auth_type or self.config.AUTH_TYPE:
-                auth_successful = self.auth_handler.authenticate(auth_type)
+                auth_successful = self.auth_handler.authenticate(auth_type or self.config.AUTH_TYPE)
                 if not auth_successful:
-                    logger.error("Authentication failed, aborting crawl")
-                    return {}
+                    logger.error("Authentication failed, continuing crawl without authentication")
+                    self._take_screenshot("auth_failed")
 
-            # Add start URL to queue
-            self.url_queue.append(
-                {"url": self.driver.current_url, "depth": 0, "source": "initial"}
-            )
+            # Start with the base URL
+            self.url_queue.append({
+                "url": self.base_url,
+                "depth": 0,
+                "source": "initial"
+            })
 
-            # Process URL queue breadth-first
             while self.url_queue and self.url_queue[0]["depth"] <= max_depth:
                 current = self.url_queue.pop(0)
                 current_url = current["url"]
                 current_depth = current["depth"]
 
-                # Skip if already visited
                 if current_url in self.visited_urls:
                     continue
 
                 logger.info(f"Crawling {current_url} (depth {current_depth})")
 
                 try:
-                    # Visit the URL
                     self.driver.get(current_url)
-
-                    # Wait for page to load
                     WebDriverWait(self.driver, self.config.PAGE_LOAD_TIMEOUT).until(
-                        lambda d: d.execute_script("return document.readyState")
-                        == "complete"
+                        lambda d: d.execute_script("return document.readyState") == "complete"
                     )
 
-                    # Mark as visited
                     self.visited_urls.add(current_url)
-
-                    # Extract page data
-                    page_data = self._extract_page_data(
-                        current_url, current_depth, current["source"]
-                    )
+                    page_data = self._extract_page_data(current_url, current_depth, current["source"])
                     self.page_data[current_url] = page_data
 
-                    # Extract URLs from the page
                     if current_depth < max_depth:
                         self._extract_and_queue_urls(current_url, current_depth)
 
                 except (TimeoutException, WebDriverException) as e:
                     logger.warning(f"Error accessing {current_url}: {str(e)}")
+                    self._take_screenshot(f"error_{current_url.replace('/', '_')}")
                     continue
 
-                # Small delay to avoid overloading the server
                 time.sleep(1)
 
             logger.info(f"Crawl completed. Visited {len(self.visited_urls)} pages.")
@@ -146,7 +141,6 @@ class WebCrawler:
             return self.page_data
 
         finally:
-            # Clean up
             if self.driver:
                 self.driver.quit()
 
@@ -243,4 +237,68 @@ class WebCrawler:
         with open(map_file, "w") as f:
             json.dump(page_map, f, indent=2)
 
+        # Save HTML content of each page
+        for url, data in self.page_data.items():
+            self._save_page_content(url, data.get("html_content", ""))
+
         logger.info(f"Saved crawl results to {output_dir}")
+
+    def _save_page_content(self, url, content):
+        """Save the HTML content of the page to a file."""
+        # Create a safe filename from the URL
+        safe_filename = self._safe_filename(url)
+        output_dir = os.path.join(self.config.OUTPUT_DIR, "discovered_pages")
+        os.makedirs(output_dir, exist_ok=True)
+        output_file = os.path.join(output_dir, f"{safe_filename}.html")
+
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(content)
+
+        logger.info(f"Saved page content to {output_file}")
+
+    def _safe_filename(self, url):
+        """Convert URL to a safe filename."""
+        # Remove protocol and replace special characters
+        filename = url.split("://")[-1].replace("/", "_").replace("?", "_").replace("&", "_").replace("=", "_")
+        return filename
+
+    def _take_screenshot(self, name):
+        """Take a screenshot for debugging purposes."""
+        screenshot_path = os.path.join(self.config.OUTPUT_DIR, "screenshots", f"{name}.png")
+        os.makedirs(os.path.dirname(screenshot_path), exist_ok=True)
+        self.driver.save_screenshot(screenshot_path)
+        logger.info(f"Saved screenshot: {screenshot_path}")
+
+    def _is_valid_url(self, url: str) -> bool:
+        """Check if a URL should be crawled."""
+        if not url:
+            return False
+
+        parsed_url = urllib.parse.urlparse(url)
+        base_parsed = urllib.parse.urlparse(self.base_url)
+
+        # Check if URL is in same domain
+        if not self.config.INCLUDE_SUBDOMAINS:
+            if parsed_url.netloc != base_parsed.netloc:
+                return False
+        else:
+            if not parsed_url.netloc.endswith(base_parsed.netloc):
+                return False
+
+        # Check exclude patterns
+        for pattern in self.config.EXCLUDE_PATTERNS:
+            if pattern in url:
+                return False
+
+        return True
+
+    def _normalize_url(self, url: str) -> str:
+        """Normalize URL to avoid duplicates."""
+        parsed = urllib.parse.urlparse(url)
+        # Remove fragments
+        normalized = parsed._replace(fragment='')
+        # Remove trailing slash
+        path = normalized.path
+        if path.endswith('/'):
+            path = path[:-1]
+        return urllib.parse.urlunparse(normalized._replace(path=path))

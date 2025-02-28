@@ -1,11 +1,26 @@
 # Core dependencies
-selenium
-beautifulsoup4
-requests
-langchain
+selenium>=4.0.0
+beautifulsoup4>=4.9.3
+requests>=2.26.0
+langchain>=0.1.0
 langchain-openai
-python-dotenv
-webdriver-manager
+python-dotenv>=0.19.0
+webdriver-manager>=3.8.0
+
+pytest
+pytest-cov
+flake8
+black
+isort
+mypy
+pre-commit
+sphinx
+sphinx-rtd-theme
+safety
+bandit
+langchain_openai
+openai
+
 
 # Testing utilities
 pytest
@@ -18,3 +33,5 @@ html5lib
 # Utilities
 tqdm
 pyyaml
+openai>=1.0.0
+retry>=0.9.2

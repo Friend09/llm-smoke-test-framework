@@ -18,20 +18,22 @@ class LLMAnalyzer:
     LLM-based analyzer that processes page data and generates test information.
     """
 
-    def __init__(self, config=None):
+    def __init__(self, config: Config):
         """
         Initialize the LLM analyzer.
 
         Args:
             config (Config): Configuration object
         """
-        self.config = config or Config()
+        self.config = config
+        self.config.validate()  # Ensure required settings are present
 
         # Initialize OpenAI client
         self.llm = ChatOpenAI(
-            openai_api_key=self.config.OPENAI_API_KEY,
+            api_key=self.config.OPENAI_API_KEY,
             model=self.config.LLM_MODEL,
-            temperature=0.1,
+            temperature=self.config.LLM_TEMPERATURE,
+            max_tokens=self.config.LLM_MAX_TOKENS
         )
 
     def analyze_page(self, page_data):
