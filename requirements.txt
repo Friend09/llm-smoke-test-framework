@@ -1,1 +1,20 @@
-# requirements.txt - Add your content here
+# Core dependencies
+selenium
+beautifulsoup4
+requests
+langchain
+langchain-openai
+python-dotenv
+webdriver-manager
+
+# Testing utilities
+pytest
+pytest-html
+
+# Web parsing
+lxml
+html5lib
+
+# Utilities
+tqdm
+pyyaml

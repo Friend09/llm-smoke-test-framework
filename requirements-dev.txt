@@ -1,17 +1,14 @@
 # requirements-dev.txt - Add your content here
-ipykernel
-python-dotenv
-rich
-selenium
-bs4
-requests
-openai
-langchain
-langchain_core
-langchain_community
-langchain_experimental
-langchain_openai
-black
-webdriver-manager
+
+# Development dependencies
 pytest
-pytest-html
+pytest-cov
+flake8
+black
+isort
+mypy
+pre-commit
+sphinx
+sphinx-rtd-theme
+safety
+bandit

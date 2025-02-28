@@ -1,1 +1,1 @@
-# Package initialization
+# Unit tests package initialization
