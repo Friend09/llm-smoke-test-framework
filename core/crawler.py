@@ -1,304 +1,253 @@
-# core/crawler.py - Add your implementation here
-
-"""4. Web Crawler"""
-
 # core/crawler.py
-import os
 import json
-import time
 import logging
-import urllib.parse
+import os
+from typing import Dict, Any, Optional
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options as ChromeOptions
-from selenium.webdriver.firefox.options import Options as FirefoxOptions
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException
-from webdriver_manager.chrome import ChromeDriverManager
-from webdriver_manager.firefox import GeckoDriverManager
 
 from config.config import Config
-from core.auth_handler import AuthHandler
-from utils.url_extractor import URLExtractor
-from utils.element_finder import ElementFinder
 
 logger = logging.getLogger(__name__)
 
-
 class WebCrawler:
-    """
-    Web crawler that discovers all pages and interactive elements
-    in a web application, handling authentication as needed.
-    """
+    """Web crawler for extracting page data for testing."""
 
-    def __init__(self, base_url: str, config: Config):
-        """Initialize the WebCrawler with base URL and configuration."""
-        self.base_url = base_url
+    def __init__(self, config: Config):
+        """Initialize the web crawler.
+
+        Args:
+            config (Config): Configuration object
+        """
         self.config = config
         self.driver = None
-        self.visited_urls = set()
-        self.page_data = {}  # Store page data
-        self.url_queue = []  # Queue for URLs to visit
-        self.setup_driver()
+        self._initialize_driver()
 
-    def setup_driver(self):
-        """Configure and initialize the WebDriver"""
-        options = ChromeOptions()
-        if self.config.HEADLESS:
-            options.add_argument('--headless')
-
-        # Add any additional Chrome options from config
-        for option in self.config.BROWSER_OPTIONS:
-            if option:
-                options.add_argument(option)
-
+    def _initialize_driver(self):
+        """Initialize the Selenium WebDriver."""
         try:
-            self.driver = webdriver.Chrome(
-                service=webdriver.chrome.service.Service(
-                    ChromeDriverManager().install()
-                ),
-                options=options
-            )
+            options = Options()
+            if self.config.HEADLESS:
+                options.add_argument('--headless')
+            options.add_argument('--no-sandbox')
+            options.add_argument('--disable-dev-shm-usage')
 
-            # Set timeouts
-            self.driver.implicitly_wait(self.config.IMPLICIT_WAIT)
+            if self.config.CHROME_DRIVER_PATH:
+                service = Service(executable_path=self.config.CHROME_DRIVER_PATH)
+                self.driver = webdriver.Chrome(service=service, options=options)
+            else:
+                self.driver = webdriver.Chrome(options=options)
+
             self.driver.set_page_load_timeout(self.config.PAGE_LOAD_TIMEOUT)
-
-            logger.debug("WebDriver initialized successfully")
-
+            logger.info("WebDriver initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize WebDriver: {str(e)}")
             raise
 
-        # Initialize auth handler
-        self.auth_handler = AuthHandler(self.driver)
-
-    def start_crawling(self, max_depth=None, auth_type=None):
-        """
-        Start crawling the web application.
+    def extract_page_data(self, url: str) -> Dict[str, Any]:
+        """Extract relevant data from a webpage.
 
         Args:
-            max_depth (int): Maximum depth to crawl
-            auth_type (str): Authentication type to use
+            url (str): URL to crawl
 
         Returns:
-            dict: Discovered pages and their data
+            Dict[str, Any]: Extracted page data
         """
-        max_depth = max_depth or self.config.MAX_DEPTH
-        self.page_data = {}  # Reset page data
-        self.url_queue = []  # Reset URL queue
+        if not self.driver:
+            self._initialize_driver()
 
         try:
-            logger.info(f"Starting crawl at {self.base_url}")
-            self.driver.get(self.base_url)
+            logger.info(f"Crawling URL: {url}")
+            self.driver.get(url)
+            WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.TAG_NAME, "body"))
+            )
 
-            if auth_type or self.config.AUTH_TYPE:
-                auth_successful = self.auth_handler.authenticate(auth_type or self.config.AUTH_TYPE)
-                if not auth_successful:
-                    logger.error("Authentication failed, continuing crawl without authentication")
-                    self._take_screenshot("auth_failed")
-
-            # Start with the base URL
-            self.url_queue.append({
-                "url": self.base_url,
-                "depth": 0,
-                "source": "initial"
-            })
-
-            while self.url_queue and self.url_queue[0]["depth"] <= max_depth:
-                current = self.url_queue.pop(0)
-                current_url = current["url"]
-                current_depth = current["depth"]
-
-                if current_url in self.visited_urls:
-                    continue
-
-                logger.info(f"Crawling {current_url} (depth {current_depth})")
-
-                try:
-                    self.driver.get(current_url)
-                    WebDriverWait(self.driver, self.config.PAGE_LOAD_TIMEOUT).until(
-                        lambda d: d.execute_script("return document.readyState") == "complete"
-                    )
-
-                    self.visited_urls.add(current_url)
-                    page_data = self._extract_page_data(current_url, current_depth, current["source"])
-                    self.page_data[current_url] = page_data
-
-                    if current_depth < max_depth:
-                        self._extract_and_queue_urls(current_url, current_depth)
-
-                except (TimeoutException, WebDriverException) as e:
-                    logger.warning(f"Error accessing {current_url}: {str(e)}")
-                    self._take_screenshot(f"error_{current_url.replace('/', '_')}")
-                    continue
-
-                time.sleep(1)
-
-            logger.info(f"Crawl completed. Visited {len(self.visited_urls)} pages.")
-            self._save_results()
-            return self.page_data
-
-        finally:
-            if self.driver:
-                self.driver.quit()
-
-    def _extract_page_data(self, url, depth, source):
-        """
-        Extract data from the current page.
-
-        Args:
-            url (str): URL of the page
-            depth (int): Depth of the page in the crawl
-            source (str): Source URL or element that led to this page
-
-        Returns:
-            dict: Page data
-        """
-        # Initialize the data structure
-        page_data = {
-            "url": url,
-            "title": self.driver.title,
-            "depth": depth,
-            "source": source,
-            "elements": [],
-        }
-
-        # Use the ElementFinder to identify important UI elements
-        element_finder = ElementFinder(self.driver)
-
-        # Get interactive elements
-        interactive_elements = element_finder.find_interactive_elements()
-        page_data["elements"] = interactive_elements
-
-        # Detect frames/iframes
-        frames = element_finder.find_frames()
-        page_data["frames"] = frames
-
-        # Detect form elements
-        forms = element_finder.find_forms()
-        page_data["forms"] = forms
-
-        # Capture page structure (heading hierarchy)
-        headings = element_finder.find_headings()
-        page_data["headings"] = headings
-
-        return page_data
-
-    def _extract_and_queue_urls(self, current_url, current_depth):
-        """
-        Extract URLs from the current page and add them to the queue.
-
-        Args:
-            current_url (str): URL of the current page
-            current_depth (int): Depth of the current page
-        """
-        # Extract URLs
-        url_extractor = URLExtractor(
-            self.driver,
-            self.config.BASE_URL,
-            self.config.EXCLUDE_PATTERNS,
-            self.config.INCLUDE_SUBDOMAINS,
-        )
-
-        new_urls = url_extractor.extract_urls()
-
-        # Add new URLs to the queue
-        for url in new_urls:
-            if url not in self.visited_urls and url not in [
-                item["url"] for item in self.url_queue
-            ]:
-                self.url_queue.append(
-                    {"url": url, "depth": current_depth + 1, "source": current_url}
-                )
-
-    def _save_results(self):
-        """Save crawl results to file."""
-        # Create output directory if it doesn't exist
-        output_dir = os.path.join(self.config.OUTPUT_DIR, "discovered_pages")
-        os.makedirs(output_dir, exist_ok=True)
-
-        # Save all pages data
-        output_file = os.path.join(output_dir, "all_pages.json")
-        with open(output_file, "w") as f:
-            json.dump(self.page_data, f, indent=2)
-
-        # Save page map (showing the relationship between pages)
-        page_map = {}
-        for url, data in self.page_data.items():
-            page_map[url] = {
-                "title": data["title"],
-                "depth": data["depth"],
-                "source": data["source"],
+            # Basic page information
+            page_data = {
+                "url": url,
+                "title": self.driver.title,
+                "elements": [],
+                "frames": [],
+                "forms": [],
+                "headings": []
             }
 
-        map_file = os.path.join(output_dir, "page_map.json")
-        with open(map_file, "w") as f:
-            json.dump(page_map, f, indent=2)
+            # Extract interactive elements
+            self._extract_elements(page_data)
 
-        # Save HTML content of each page
-        for url, data in self.page_data.items():
-            self._save_page_content(url, data.get("html_content", ""))
+            # Extract frames
+            self._extract_frames(page_data)
 
-        logger.info(f"Saved crawl results to {output_dir}")
+            # Extract forms
+            self._extract_forms(page_data)
 
-    def _save_page_content(self, url, content):
-        """Save the HTML content of the page to a file."""
-        # Create a safe filename from the URL
-        safe_filename = self._safe_filename(url)
-        output_dir = os.path.join(self.config.OUTPUT_DIR, "discovered_pages")
-        os.makedirs(output_dir, exist_ok=True)
-        output_file = os.path.join(output_dir, f"{safe_filename}.html")
+            # Extract headings
+            self._extract_headings(page_data)
 
-        with open(output_file, "w", encoding="utf-8") as f:
-            f.write(content)
+            return page_data
 
-        logger.info(f"Saved page content to {output_file}")
+        except TimeoutException:
+            logger.error(f"Timeout while loading URL: {url}")
+            return self._create_error_response(url, "Timeout while loading page")
 
-    def _safe_filename(self, url):
-        """Convert URL to a safe filename."""
-        # Remove protocol and replace special characters
-        filename = url.split("://")[-1].replace("/", "_").replace("?", "_").replace("&", "_").replace("=", "_")
-        return filename
+        except WebDriverException as e:
+            logger.error(f"WebDriver error: {str(e)}")
+            return self._create_error_response(url, f"WebDriver error: {str(e)}")
 
-    def _take_screenshot(self, name):
-        """Take a screenshot for debugging purposes."""
-        screenshot_path = os.path.join(self.config.OUTPUT_DIR, "screenshots", f"{name}.png")
-        os.makedirs(os.path.dirname(screenshot_path), exist_ok=True)
-        self.driver.save_screenshot(screenshot_path)
-        logger.info(f"Saved screenshot: {screenshot_path}")
+        except Exception as e:
+            logger.error(f"Error extracting page data: {str(e)}")
+            return self._create_error_response(url, str(e))
 
-    def _is_valid_url(self, url: str) -> bool:
-        """Check if a URL should be crawled."""
-        if not url:
-            return False
+    def _extract_elements(self, page_data: Dict[str, Any]):
+        """Extract interactive elements from the page."""
+        for elem_type, by_method in [
+            ("button", By.TAG_NAME),
+            ("a", By.TAG_NAME),
+            ("input", By.TAG_NAME),
+            ("select", By.TAG_NAME)
+        ]:
+            elements = self.driver.find_elements(by_method, elem_type)
+            for elem in elements:
+                try:
+                    element_data = {
+                        "type": elem_type,
+                        "tag": elem.tag_name
+                    }
 
-        parsed_url = urllib.parse.urlparse(url)
-        base_parsed = urllib.parse.urlparse(self.base_url)
+                    # Try to get various attributes
+                    for attr in ["id", "name", "class", "type", "value", "placeholder", "href"]:
+                        try:
+                            value = elem.get_attribute(attr)
+                            if value:
+                                element_data[attr] = value
+                        except:
+                            pass
 
-        # Check if URL is in same domain
-        if not self.config.INCLUDE_SUBDOMAINS:
-            if parsed_url.netloc != base_parsed.netloc:
-                return False
-        else:
-            if not parsed_url.netloc.endswith(base_parsed.netloc):
-                return False
+                    # Get text content
+                    try:
+                        text = elem.text
+                        if text:
+                            element_data["text"] = text
+                    except:
+                        pass
 
-        # Check exclude patterns
-        for pattern in self.config.EXCLUDE_PATTERNS:
-            if pattern in url:
-                return False
+                    # Add to elements list
+                    page_data["elements"].append(element_data)
+                except:
+                    continue
 
-        return True
+    def _extract_frames(self, page_data: Dict[str, Any]):
+        """Extract frames from the page."""
+        frames = self.driver.find_elements(By.TAG_NAME, "iframe")
+        for frame in frames:
+            try:
+                frame_data = {"tag": "iframe"}
+                for attr in ["id", "name", "src", "width", "height"]:
+                    value = frame.get_attribute(attr)
+                    if value:
+                        frame_data[attr] = value
+                page_data["frames"].append(frame_data)
+            except:
+                continue
 
-    def _normalize_url(self, url: str) -> str:
-        """Normalize URL to avoid duplicates."""
-        parsed = urllib.parse.urlparse(url)
-        # Remove fragments
-        normalized = parsed._replace(fragment='')
-        # Remove trailing slash
-        path = normalized.path
-        if path.endswith('/'):
-            path = path[:-1]
-        return urllib.parse.urlunparse(normalized._replace(path=path))
+    def _extract_forms(self, page_data: Dict[str, Any]):
+        """Extract forms from the page."""
+        forms = self.driver.find_elements(By.TAG_NAME, "form")
+        for form in forms:
+            try:
+                form_data = {
+                    "tag": "form",
+                    "inputs": []
+                }
+
+                # Form attributes
+                for attr in ["id", "name", "action", "method"]:
+                    value = form.get_attribute(attr)
+                    if value:
+                        form_data[attr] = value
+
+                # Form inputs
+                inputs = form.find_elements(By.TAG_NAME, "input")
+                for input_elem in inputs:
+                    input_data = {}
+                    for attr in ["id", "name", "type", "value", "placeholder"]:
+                        value = input_elem.get_attribute(attr)
+                        if value:
+                            input_data[attr] = value
+                    if input_data:
+                        form_data["inputs"].append(input_data)
+
+                page_data["forms"].append(form_data)
+            except:
+                continue
+
+    def _extract_headings(self, page_data: Dict[str, Any]):
+        """Extract headings from the page."""
+        for h_level in range(1, 7):
+            headings = self.driver.find_elements(By.TAG_NAME, f"h{h_level}")
+            for heading in headings:
+                try:
+                    heading_text = heading.text
+                    if heading_text:
+                        page_data["headings"].append({
+                            "level": h_level,
+                            "text": heading_text
+                        })
+                except:
+                    continue
+
+    def _create_error_response(self, url: str, error_msg: str) -> Dict[str, Any]:
+        """Create an error response when page crawling fails."""
+        return {
+            "url": url,
+            "title": "Error",
+            "error": error_msg,
+            "elements": [],
+            "frames": [],
+            "forms": [],
+            "headings": []
+        }
+
+    def save_page_data(self, page_data: Dict[str, Any], filename: Optional[str] = None) -> str:
+        """Save page data to a JSON file.
+
+        Args:
+            page_data (Dict[str, Any]): Page data to save
+            filename (Optional[str]): Custom filename, defaults to URL-based name
+
+        Returns:
+            str: Path to the saved file
+        """
+        if filename is None:
+            # Create a filename based on the URL
+            import re
+            from urllib.parse import urlparse
+
+            parsed_url = urlparse(page_data["url"])
+            domain = parsed_url.netloc.replace(".", "_")
+            path = re.sub(r'[^\w]', '_', parsed_url.path)
+            if not path:
+                path = "home"
+            filename = f"{domain}_{path}.json"
+
+        # Ensure the path exists
+        output_path = os.path.join(self.config.page_data_path, filename)
+
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(page_data, indent=2, fp=f)
+
+        logger.info(f"Saved page data to {output_path}")
+        return output_path
+
+    def close(self):
+        """Close the browser."""
+        if self.driver:
+            self.driver.quit()
+            self.driver = None
+            logger.info("WebDriver closed")

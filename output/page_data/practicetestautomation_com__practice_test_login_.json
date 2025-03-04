@@ -1,0 +1,110 @@
+{
+  "url": "https://practicetestautomation.com/practice-test-login/",
+  "title": "Test Login | Practice Test Automation",
+  "elements": [
+    {
+      "type": "submit",
+      "tag": "button"
+    },
+    {
+      "type": "submit",
+      "tag": "button",
+      "id": "toggle-navigation",
+      "name": "toggle-navigation",
+      "class": "toggle-navigation"
+    },
+    {
+      "type": "submit",
+      "tag": "button",
+      "id": "submit",
+      "class": "btn",
+      "text": "Submit"
+    },
+    {
+      "type": "a",
+      "tag": "a",
+      "class": "skip-content",
+      "href": "https://practicetestautomation.com/practice-test-login/#main-container"
+    },
+    {
+      "type": "a",
+      "tag": "a",
+      "class": "custom-logo-link",
+      "href": "https://practicetestautomation.com/"
+    },
+    {
+      "type": "a",
+      "tag": "a",
+      "href": "https://practicetestautomation.com/",
+      "text": "HOME"
+    },
+    {
+      "type": "a",
+      "tag": "a",
+      "href": "https://practicetestautomation.com/practice/",
+      "text": "PRACTICE"
+    },
+    {
+      "type": "a",
+      "tag": "a",
+      "href": "https://practicetestautomation.com/courses/",
+      "text": "COURSES"
+    },
+    {
+      "type": "a",
+      "tag": "a",
+      "href": "https://practicetestautomation.com/blog/",
+      "text": "BLOG"
+    },
+    {
+      "type": "a",
+      "tag": "a",
+      "href": "https://practicetestautomation.com/contact/",
+      "text": "CONTACT"
+    },
+    {
+      "type": "a",
+      "tag": "a",
+      "href": "https://practicetestautomation.com/",
+      "text": "Practice Test Automation."
+    },
+    {
+      "type": "a",
+      "tag": "a",
+      "href": "https://practicetestautomation.com/privacy-policy/",
+      "text": "Privacy Policy"
+    },
+    {
+      "type": "text",
+      "tag": "input",
+      "id": "username",
+      "name": "username"
+    },
+    {
+      "type": "password",
+      "tag": "input",
+      "id": "password",
+      "name": "password"
+    }
+  ],
+  "frames": [],
+  "forms": [],
+  "headings": [
+    {
+      "level": 2,
+      "text": "Test login"
+    },
+    {
+      "level": 5,
+      "text": "Test case 1: Positive LogIn test"
+    },
+    {
+      "level": 5,
+      "text": "Test case 2: Negative username test"
+    },
+    {
+      "level": 5,
+      "text": "Test case 3: Negative password test"
+    }
+  ]
+}

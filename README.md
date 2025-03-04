@@ -1,230 +1,129 @@
-# LLM-Enhanced Smoke Test Generator
+# LLM Smoke Test Framework
 
-An intelligent framework for automated smoke test generation using web crawling and large language models.
-
-## Overview
-
-This framework automatically discovers and tests web applications by:
-
-1. Crawling the application to discover all pages and interactive elements
-2. Using LLMs (like OpenAI's GPT models) to analyze page structure
-3. Generating comprehensive smoke tests with Cucumber features, step definitions, and page objects
-4. Integrating with existing Selenium and WebDriverIO test infrastructure
-
-The framework solves common challenges in test automation, including:
-
-- Discovering hidden pages and dynamic content
-- Correctly extracting all URLs and interactive elements
-- Handling different authentication methods (Basic, NTLM, Okta)
-- Creating maintainable and reliable test scripts
+An automated framework that uses LLM to generate smoke tests for web applications.
 
 ## Features
 
-### Enhanced Web Crawler
-
-- Handles various authentication types
-- Advanced URL extraction for all page elements
-- Support for iframes, popups, and dynamic content
-- Systematic discovery of all application pages
-
-### LLM-Powered Test Generation
-
-- Analyzes page structure to identify key elements
-- Generates comprehensive smoke tests for each page
-- Creates maintainable page objects and step definitions
-- Identifies optimal locator strategies
-
-### Framework Integration
-
-- Compatible with Cucumber
-- Supports both Java and TypeScript implementations
-- Works with Selenium and WebDriverIO
-
-### Customizable Configuration
-
-- Environment variable configuration
-- Command-line interface
-- Configurable depth and scope of testing
-
-## Prerequisites
-
-- Python 3.8+
-- Java JDK 11+ (for Java tests) or Node.js 14+ (for TypeScript tests)
-- Chrome browser
-- OpenAI API key
+- Web page crawling and data extraction
+- LLM-based analysis of page elements
+- Automatic generation of test scripts for multiple frameworks
+- Support for Cucumber/Gherkin test format
 
 ## Installation
 
+1. Clone the repository:
+
 ```bash
-# Clone the repository
-git clone https://github.com/your-username/llm-smoke-test-generator.git
-cd llm-smoke-test-generator
+git clone https://github.com/yourusername/llm-smoke-test-framework.git
+cd llm-smoke-test-framework
+```
 
-# Create a virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: venv\Scripts\activate
+2. Install dependencies:
 
-# Install dependencies
+```bash
 pip install -r requirements.txt
-
-# Copy and modify .env file
-cp .env.example config/.env
-# Edit .env with your settings
 ```
 
-## Quick Start
+3. Create a `.env` file with your OpenAI API key:
 
-1. Configure your environment variables in `.env`
-2. Run the crawler and test generator:
-
-```bash
-python runners/crawler_runner.py --url https://your-app.com --auth basic
 ```
-
-3. Find generated tests in the `output/test_scripts` directory
-4. Execute tests with your testing framework
+OPENAI_API_KEY=your_api_key_here
+```
 
 ## Usage
 
-### Basic Usage
+### End-to-End Process
+
+Process a URL through the entire pipeline:
 
 ```bash
-python runners/crawler_runner.py --url https://your-app.com
+python run.py e2e https://example.com
 ```
 
-### Advanced Options
+### Individual Steps
+
+1. Crawl a webpage:
 
 ```bash
-python runners/crawler_runner.py \
-  --url https://your-app.com \
-  --depth 4 \
-  --auth okta \
-  --output custom_output \
-  --framework cucumber \
-  --language typescript \
-  --headless
+python run.py crawl https://example.com
 ```
 
-### Command Line Options
+2. Analyze page data:
 
-| Option         | Description                             | Default   |
-| -------------- | --------------------------------------- | --------- |
-| `--url`        | Starting URL to crawl                   | From .env |
-| `--depth`      | Maximum depth to crawl                  | 3         |
-| `--auth`       | Authentication type (basic, ntlm, okta) | From .env |
-| `--output`     | Output directory                        | output    |
-| `--framework`  | Test framework (cucumber)               | cucumber  |
-| `--language`   | Programming language (java, typescript) | java      |
-| `--headless`   | Run in headless mode                    | False     |
-| `--skip-crawl` | Skip crawling and use existing data     | False     |
-
-## Project Structure
-
-```
-llm_smoke_test_framework/
-│
-├── config/                  # Configuration settings
-│   ├── config.py            # Config loader
-│   └── .env                 # Environment variables
-│
-├── core/                    # Core components
-│   ├── crawler.py           # Web crawler
-│   ├── auth_handler.py      # Authentication handling
-│   ├── llm_analyzer.py      # LLM integration
-│   └── test_generator.py    # Test script generation
-│
-├── utils/                   # Utility functions
-│   ├── url_extractor.py     # URL extraction
-│   ├── element_finder.py    # UI element detection
-│   └── html_parser.py       # HTML parsing
-│
-├── output/                  # Generated output
-│   ├── discovered_pages/    # Crawler results
-│   ├── test_scripts/        # Generated tests
-│   └── reports/             # Test reports
-│
-├── runners/                 # Execution scripts
-│   ├── crawler_runner.py    # Main runner
-│   └── test_runner.py       # Test executor
-│
-└── tests/                   # Tests for the framework
-    ├── unit/                # Unit tests
-    └── integration/         # Integration tests
+```bash
+python run.py analyze output/page_data/example_com_home.json
 ```
 
-## Configuration
+3. Generate test scripts:
 
-Create a `.env` file in the root directory (or inside the config directory) with the following variables:
-
-```
-# Application settings
-BASE_URL=https://example.com
-BROWSER=chrome
-HEADLESS=True
-
-# Authentication settings
-AUTH_TYPE=basic  # Options: basic, ntlm, okta
-USERNAME=your_username
-PASSWORD=your_password
-OKTA_URL=https://your-company.okta.com
-
-# Crawler settings
-MAX_DEPTH=3
-EXCLUDE_PATTERNS=logout,#,javascript:
-INCLUDE_SUBDOMAINS=True
-
-# Selenium settings
-IMPLICIT_WAIT=10
-PAGE_LOAD_TIMEOUT=30
-
-# LLM settings
-OPENAI_API_KEY=your_openai_api_key
-LLM_MODEL=gpt-4o-mini
-
-# Output settings to save the results
-OUTPUT_DIR=output
+```bash
+python run.py generate output/analysis/example_com_home_analysis.json
 ```
 
-## Generated Test Structure
+### Additional Options
 
-The framework generates the following for each discovered page:
+- Specify output filenames:
 
-1. **Feature File** - Cucumber scenario for smoke testing
-2. **Page Object** - Encapsulated page interactions and locators
-3. **Step Definitions** - Test steps implementation
+  ```bash
+  python run.py crawl https://example.com -o custom_name.json
+  ```
 
-Example structure:
+- Choose a different test framework:
 
-```
-output/test_scripts/
-├── features/
-│   └── login_page.feature
-├── page_objects/
-│   └── LoginPage.java
-└── step_definitions/
-    └── LoginPageSteps.java
-```
+  ```bash
+  python run.py e2e https://example.com -f playwright
+  ```
 
-## Contributing
+## Output
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+The framework generates:
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+1. Page data in JSON format
+2. Analysis of the page with test recommendations
+3. Test scripts:
+
+- Cucumber feature files (`.feature`)
+- Step definitions (Java)
+- Page Object Model (Java)
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT
 
-## Acknowledgments
+## Usage Instructions
 
-- OpenAI for API access
-- Selenium and WebDriverIO communities
-- Cucumber for BDD framework
+To use this production setup:
 
-## Contact
+1. Install the requirements:
 
-If you have any questions or feedback, please open an issue on GitHub.
+```bash
+pip install -r requirements.txt
+```
+
+2. Create the `.env` file with your API key.
+
+3. Run the end-to-end process:
+
+```bash
+python run.py e2e https://practicetestautomation.com/practice-test-login/
+```
+
+Or run individual steps:
+
+```bash
+python run.py crawl https://practicetestautomation.com/practice-test-login/
+python run.py analyze output/page_data/practicetestautomation_com_practice-test-login.json
+python run.py generate output/analysis/practicetestautomation_com_practice-test-login_analysis.json
+```
+
+This production setup includes:
+
+- Proper error handling throughout the code
+- Comprehensive logging
+- Command-line interface with multiple commands
+- Configuration via environment variables
+- Structured output directories
+- Support for different test frameworks
+- Detailed documentation
+
+It's ready to be used as a reliable tool in your testing workflow.

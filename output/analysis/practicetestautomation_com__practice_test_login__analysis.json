@@ -1,0 +1,36 @@
+{
+  "page_title_validation": "Test Login | Practice Test Automation",
+  "unique_identifiers": [
+    "Test login",
+    "Submit button",
+    "username input field",
+    "password input field"
+  ],
+  "key_elements": [
+    "Submit button",
+    "username input field",
+    "password input field",
+    "toggle-navigation button",
+    "HOME link"
+  ],
+  "smoke_test_steps": [
+    "1. Navigate to the page URL: https://practicetestautomation.com/practice-test-login/",
+    "2. Verify that the page title is 'Test Login | Practice Test Automation'.",
+    "3. Check for the presence of the heading 'Test login'.",
+    "4. Verify that the username input field is displayed and enabled.",
+    "5. Verify that the password input field is displayed and enabled.",
+    "6. Check that the 'Submit' button is visible and enabled.",
+    "7. Verify the presence of the 'toggle-navigation' button.",
+    "8. Ensure that the 'HOME' link is present and directs to the correct URL.",
+    "9. Optionally, test the 'Submit' button to ensure it responds appropriately when clicked."
+  ],
+  "locator_strategies": [
+    "Use 'id' to locate the username input field: #username",
+    "Use 'id' to locate the password input field: #password",
+    "Use 'class' to locate the submit button: .btn",
+    "Use 'id' to locate the toggle-navigation button: #toggle-navigation",
+    "Use 'text' for the HOME link: a[href='https://practicetestautomation.com/']"
+  ],
+  "url": "https://practicetestautomation.com/practice-test-login/",
+  "title": "Test Login | Practice Test Automation"
+}

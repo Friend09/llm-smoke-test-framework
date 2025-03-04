@@ -98,6 +98,50 @@ class TestGenerator:
 
         return generated_tests
 
+    def generate_login_tests(self):
+        """Generate login-specific test cases"""
+        test_cases = [
+            {
+                "name": "test_successful_login",
+                "description": "Verify successful login with valid credentials",
+                "steps": [
+                    f"Navigate to {self.config.LOGIN_URL}",
+                    f"Enter username: {self.config.TEST_USERNAME}",
+                    f"Enter password: {self.config.TEST_PASSWORD}",
+                    "Click login button",
+                    f"Verify success message: {self.config.SUCCESS_MESSAGE}"
+                ]
+            }
+        ]
+
+        if self.config.GENERATE_NEGATIVE_TESTS:
+            test_cases.extend([
+                {
+                    "name": "test_invalid_username",
+                    "description": "Verify error message with invalid username",
+                    "steps": [
+                        f"Navigate to {self.config.LOGIN_URL}",
+                        "Enter invalid username",
+                        f"Enter password: {self.config.TEST_PASSWORD}",
+                        "Click login button",
+                        "Verify error message"
+                    ]
+                },
+                {
+                    "name": "test_invalid_password",
+                    "description": "Verify error message with invalid password",
+                    "steps": [
+                        f"Navigate to {self.config.LOGIN_URL}",
+                        f"Enter username: {self.config.TEST_USERNAME}",
+                        "Enter invalid password",
+                        "Click login button",
+                        "Verify error message"
+                    ]
+                }
+            ])
+
+        return test_cases
+
     def _save_test_files(self, test_script, url, output_dir, framework, language):
         """
         Save generated test files.

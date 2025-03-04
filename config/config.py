@@ -1,62 +1,55 @@
-"""Configuration Module for LLM-Enhanced Test Generator"""
-
+# config/config.py
 import os
-from typing import List, Optional
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from typing import Optional
 from dotenv import load_dotenv
 
+# Load environment variables from .env file
 load_dotenv()
 
 @dataclass
 class Config:
-    # Application settings
-    BASE_URL: str = os.getenv("BASE_URL", "")
-    APP_NAME: str = os.getenv("APP_NAME", "web_app")
-    OUTPUT_DIR: str = os.getenv("OUTPUT_DIR", "output")
-    DEBUG_MODE: bool = os.getenv("DEBUG_MODE", "False").lower() == "true"
+    """Configuration for the LLM Smoke Test Framework."""
 
-    # Authentication settings
-    AUTH_TYPE: str = os.getenv("AUTH_TYPE", "none")
-    USERNAME: str = os.getenv("USERNAME", "")
-    PASSWORD: str = os.getenv("PASSWORD", "")
-    AUTH_CONFIG: dict = field(default_factory=lambda: {
-        "username": os.getenv("USERNAME", ""),
-        "password": os.getenv("PASSWORD", ""),
-        "token_url": os.getenv("TOKEN_URL", ""),
-        "client_id": os.getenv("CLIENT_ID", ""),
-        "client_secret": os.getenv("CLIENT_SECRET", ""),
-    })
-
-    # LLM settings
-    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-    LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-4")
-    LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.7"))
-    LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "2000"))
+    # OpenAI API settings
+    OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY", "")
+    LLM_MODEL: str = os.environ.get("LLM_MODEL", "gpt-4o-mini")
+    LLM_TEMPERATURE: float = float(os.environ.get("LLM_TEMPERATURE", "0.0"))
+    LLM_MAX_TOKENS: int = int(os.environ.get("LLM_MAX_TOKENS", "2000"))
 
     # Crawler settings
-    MAX_DEPTH: int = int(os.getenv("MAX_DEPTH", "3"))
-    EXCLUDE_PATTERNS: List[str] = field(
-        default_factory=lambda: os.getenv("EXCLUDE_PATTERNS", "logout,#,javascript:").split(",")
-    )
-    INCLUDE_SUBDOMAINS: bool = os.getenv("INCLUDE_SUBDOMAINS", "False").lower() == "true"
-    REQUEST_DELAY: float = float(os.getenv("REQUEST_DELAY", "0.5"))
+    CHROME_DRIVER_PATH: Optional[str] = os.environ.get("CHROME_DRIVER_PATH")
+    HEADLESS: bool = os.environ.get("HEADLESS", "True").lower() == "true"
+    PAGE_LOAD_TIMEOUT: int = int(os.environ.get("PAGE_LOAD_TIMEOUT", "30"))
 
-    # Browser settings
-    BROWSER: str = os.getenv("BROWSER", "chrome")
-    HEADLESS: bool = os.getenv("HEADLESS", "True").lower() == "true"
-    IMPLICIT_WAIT: int = int(os.getenv("IMPLICIT_WAIT", "10"))
-    PAGE_LOAD_TIMEOUT: int = int(os.getenv("PAGE_LOAD_TIMEOUT", "30"))
-    BROWSER_OPTIONS: List[str] = field(default_factory=lambda: [
-        "--headless" if os.getenv("HEADLESS", "True").lower() == "true" else "",
-        "--no-sandbox",
-        "--disable-dev-shm-usage",
-        "--window-size=1920,1080"
-    ])
+    # Output settings
+    OUTPUT_DIR: str = os.environ.get("OUTPUT_DIR", "output")
+    PAGE_DATA_DIR: str = os.environ.get("PAGE_DATA_DIR", "page_data")
+    ANALYSIS_DIR: str = os.environ.get("ANALYSIS_DIR", "analysis")
+    TEST_SCRIPTS_DIR: str = os.environ.get("TEST_SCRIPTS_DIR", "test_scripts")
 
     def validate(self) -> bool:
-        """Validate required configuration settings."""
+        """Validate the configuration settings."""
         if not self.OPENAI_API_KEY:
-            raise ValueError("OPENAI_API_KEY is required for test generation")
-        if not self.BASE_URL:
-            raise ValueError("BASE_URL is required")
+            raise ValueError("OPENAI_API_KEY is required")
+
+        # Create output directories if they don't exist
+        for dir_name in [self.OUTPUT_DIR,
+                         f"{self.OUTPUT_DIR}/{self.PAGE_DATA_DIR}",
+                         f"{self.OUTPUT_DIR}/{self.ANALYSIS_DIR}",
+                         f"{self.OUTPUT_DIR}/{self.TEST_SCRIPTS_DIR}"]:
+            os.makedirs(dir_name, exist_ok=True)
+
         return True
+
+    @property
+    def page_data_path(self) -> str:
+        return f"{self.OUTPUT_DIR}/{self.PAGE_DATA_DIR}"
+
+    @property
+    def analysis_path(self) -> str:
+        return f"{self.OUTPUT_DIR}/{self.ANALYSIS_DIR}"
+
+    @property
+    def test_scripts_path(self) -> str:
+        return f"{self.OUTPUT_DIR}/{self.TEST_SCRIPTS_DIR}"

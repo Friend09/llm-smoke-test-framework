@@ -33,7 +33,7 @@ class LLMAnalyzer:
             api_key=self.config.OPENAI_API_KEY,
             model=self.config.LLM_MODEL,
             temperature=self.config.LLM_TEMPERATURE,
-            max_tokens=self.config.LLM_MAX_TOKENS
+            max_tokens=self.config.LLM_MAX_TOKENS,
         )
 
     def analyze_page(self, page_data):
@@ -166,6 +166,7 @@ class LLMAnalyzer:
             logger.warning(f"Unsupported framework: {framework}")
             return {"error": f"Unsupported framework: {framework}"}
 
+
     def _generate_cucumber_script(self, page_analysis):
         """
         Generate Cucumber/Gherkin test script.
@@ -195,7 +196,7 @@ class LLMAnalyzer:
         output_parser = StructuredOutputParser.from_response_schemas(response_schemas)
         format_instructions = output_parser.get_format_instructions()
 
-        # Prepare the prompt
+        # Prepare the prompt with extra emphasis on proper JSON formatting
         prompt = ChatPromptTemplate.from_template(
             """
             You are an expert in automated testing using Cucumber with {language}.
@@ -226,6 +227,10 @@ class LLMAnalyzer:
 
             The code should follow best practices for the {language} framework and include appropriate comments.
             Handle potential errors and edge cases.
+
+            IMPORTANT: Your response MUST be valid JSON that can be parsed by the provided format instructions.
+            Do not include any explanation or text outside of the JSON structure.
+            Make sure to escape any special characters in the code, particularly backslashes and quotes.
 
             {format_instructions}
             """
@@ -263,8 +268,67 @@ class LLMAnalyzer:
             # Get response from LLM
             response = self.llm.invoke(formatted_prompt)
 
-            # Parse the structured output
-            parsed_output = output_parser.parse(response.content)
+            try:
+                # Try to parse the structured output
+                parsed_output = output_parser.parse(response.content)
+            except Exception as parse_error:
+                logger.error(f"JSON parsing error: {str(parse_error)}")
+
+                # Fall back to simple extraction of code blocks
+                content = response.content
+                feature_file = ""
+                step_definitions = ""
+                page_object = ""
+
+                # Try to extract code blocks with regex
+                import re
+
+                # Look for feature file (Gherkin syntax)
+                feature_match = re.search(r"```gherkin\n(.*?)```", content, re.DOTALL)
+                if feature_match:
+                    feature_file = feature_match.group(1)
+                else:
+                    feature_match = re.search(r"```feature\n(.*?)```", content, re.DOTALL)
+                    if feature_match:
+                        feature_file = feature_match.group(1)
+                    else:
+                        # Look for content that looks like a feature file
+                        for line in content.split("\n"):
+                            if line.startswith("Feature:") or line.startswith("Scenario:"):
+                                # Extract the whole block
+                                start_idx = content.find(line)
+                                feature_block = content[start_idx:]
+                                end_idx = feature_block.find("```")
+                                if end_idx > 0:
+                                    feature_file = feature_block[:end_idx].strip()
+                                else:
+                                    feature_file = line
+                                break
+
+                # Look for Java code blocks
+                java_blocks = re.findall(r"```java\n(.*?)```", content, re.DOTALL)
+
+                # If we found Java blocks, try to determine which is which
+                if len(java_blocks) >= 2:
+                    for block in java_blocks:
+                        if "class" in block and ("Page" in block or "PO" in block):
+                            page_object = block
+                        elif "Given" in block or "When" in block or "Then" in block:
+                            step_definitions = block
+
+                    # If we couldn't distinguish, just assign them in order
+                    if not page_object and len(java_blocks) > 0:
+                        page_object = java_blocks[0]
+                    if not step_definitions and len(java_blocks) > 1:
+                        step_definitions = java_blocks[1]
+
+                # Create a fallback parsed output
+                parsed_output = {
+                    "feature_file": feature_file or "# Error extracting feature file",
+                    "step_definitions": step_definitions
+                    or "// Error extracting step definitions",
+                    "page_object": page_object or "// Error extracting page object",
+                }
 
             # Add metadata
             parsed_output["url"] = page_analysis["url"]
