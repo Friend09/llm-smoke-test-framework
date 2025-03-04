@@ -1,40 +1,113 @@
 # LLM Smoke Test Framework
 
-An automated framework that uses LLM to generate smoke tests for web applications.
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-## Features
+An automated framework that uses LLMs to generate smoke tests for web applications. The framework crawls webpages, extracts essential elements, analyzes them using an LLM, and generates comprehensive test scripts.
 
-- Web page crawling and data extraction
-- LLM-based analysis of page elements
-- Automatic generation of test scripts for multiple frameworks
-- Support for Cucumber/Gherkin test format
+## Table of Contents
 
-## Installation
+- [LLM Smoke Test Framework](#llm-smoke-test-framework)
+  - [Table of Contents](#table-of-contents)
+  - [✨ Features](#-features)
+  - [🚀 Quick Setup](#-quick-setup)
+  - [🗂️ Project Structure](#️-project-structure)
+  - [🔧 Implementation Details](#-implementation-details)
+    - [LLM Analyzer](#llm-analyzer)
+    - [Web Crawler](#web-crawler)
+  - [⚙️ Usage](#️-usage)
+    - [End-to-End Process](#end-to-end-process)
+    - [Individual Steps](#individual-steps)
+  - [📤 Output](#-output)
+  - [🤝 Contributing](#-contributing)
+  - [📜 License](#-license)
 
-1. Clone the repository:
+## ✨ Features
+
+- **Automated Test Generation:** Leverages LLMs to create robust smoke tests
+- **Web Crawling:** Discovers and extracts key elements from web pages
+- **Configurable:** Easily adaptable to different testing frameworks and environments
+- **Modular Design:** Supports individual step execution for customized workflows
+
+## 🚀 Quick Setup
+
+1. **Clone the repository:**
 
 ```bash
 git clone https://github.com/yourusername/llm-smoke-test-framework.git
 cd llm-smoke-test-framework
 ```
 
-2. Install dependencies:
+2. **Run the setup script:**
+
+```bash
+python setup.py
+```
+
+3. **Create and activate a virtual environment:**
+
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows, use: venv\Scripts\activate
+```
+
+4. **Install dependencies:**
 
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Create a `.env` file with your OpenAI API key:
+5. **Configure environment variables:**
+
+```bash
+cp .env.example .env
+```
+
+Example `.env` configuration:
+
+```ini
+# Crawler settings
+HEADLESS=True
+PAGE_LOAD_TIMEOUT=30
+
+# Output settings
+OUTPUT_DIR=output
+
+# LLM settings
+OPENAI_API_KEY=<YOUR API KEY>
+LLM_MODEL=gpt-4o-mini
+LLM_TEMPERATURE=0.7
+LLM_MAX_TOKENS=2000
+```
+
+## 🗂️ Project Structure
 
 ```
-OPENAI_API_KEY=your_api_key_here
+llm-smoke-test-framework/
+├── config/             # Configuration management
+├── core/              # Core functionality
+├── output/            # Generated outputs
+├── tests/             # Tests
+├── .env.example       # Environment variables template
+├── requirements.txt   # Project dependencies
+└── run.py            # Main entry point
 ```
 
-## Usage
+## 🔧 Implementation Details
+
+### LLM Analyzer
+
+- `analyze_page`: Processes crawler data through LLM
+- `generate_test_script`: Creates test scripts from analysis
+- `_generate_cucumber_script`: Handles Cucumber-specific generation
+
+### Web Crawler
+
+- `extract_page_data`: Extracts page elements and structure
+- `save_page_data`: Stores extracted data in JSON format
+
+## ⚙️ Usage
 
 ### End-to-End Process
-
-Process a URL through the entire pipeline:
 
 ```bash
 python run.py e2e https://example.com
@@ -42,88 +115,37 @@ python run.py e2e https://example.com
 
 ### Individual Steps
 
-1. Crawl a webpage:
-
 ```bash
 python run.py crawl https://example.com
-```
-
-2. Analyze page data:
-
-```bash
 python run.py analyze output/page_data/example_com_home.json
-```
-
-3. Generate test scripts:
-
-```bash
 python run.py generate output/analysis/example_com_home_analysis.json
 ```
 
-### Additional Options
+## 📤 Output
 
-- Specify output filenames:
+1. **Page Data (JSON)**
 
-  ```bash
-  python run.py crawl https://example.com -o custom_name.json
-  ```
+   - Interactive elements
+   - Forms
+   - Frames
+   - Headings
 
-- Choose a different test framework:
+2. **Page Analysis**
 
-  ```bash
-  python run.py e2e https://example.com -f playwright
-  ```
+   - Element identifiers
+   - Test priorities
+   - Locator strategies
+   - Test steps
 
-## Output
+3. **Test Scripts**
+   - Cucumber features
+   - Step definitions
+   - Page objects
 
-The framework generates:
+## 🤝 Contributing
 
-1. Page data in JSON format
-2. Analysis of the page with test recommendations
-3. Test scripts:
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting pull requests.
 
-- Cucumber feature files (`.feature`)
-- Step definitions (Java)
-- Page Object Model (Java)
+## 📜 License
 
-## License
-
-MIT
-
-## Usage Instructions
-
-To use this production setup:
-
-1. Install the requirements:
-
-```bash
-pip install -r requirements.txt
-```
-
-2. Create the `.env` file with your API key.
-
-3. Run the end-to-end process:
-
-```bash
-python run.py e2e https://practicetestautomation.com/practice-test-login/
-```
-
-Or run individual steps:
-
-```bash
-python run.py crawl https://practicetestautomation.com/practice-test-login/
-python run.py analyze output/page_data/practicetestautomation_com_practice-test-login.json
-python run.py generate output/analysis/practicetestautomation_com_practice-test-login_analysis.json
-```
-
-This production setup includes:
-
-- Proper error handling throughout the code
-- Comprehensive logging
-- Command-line interface with multiple commands
-- Configuration via environment variables
-- Structured output directories
-- Support for different test frameworks
-- Detailed documentation
-
-It's ready to be used as a reliable tool in your testing workflow.
+[MIT License](LICENSE)
