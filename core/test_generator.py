@@ -109,36 +109,38 @@ class TestGenerator:
                     f"Enter username: {self.config.TEST_USERNAME}",
                     f"Enter password: {self.config.TEST_PASSWORD}",
                     "Click login button",
-                    f"Verify success message: {self.config.SUCCESS_MESSAGE}"
-                ]
+                    f"Verify success message: {self.config.SUCCESS_MESSAGE}",
+                ],
             }
         ]
 
         if self.config.GENERATE_NEGATIVE_TESTS:
-            test_cases.extend([
-                {
-                    "name": "test_invalid_username",
-                    "description": "Verify error message with invalid username",
-                    "steps": [
-                        f"Navigate to {self.config.LOGIN_URL}",
-                        "Enter invalid username",
-                        f"Enter password: {self.config.TEST_PASSWORD}",
-                        "Click login button",
-                        "Verify error message"
-                    ]
-                },
-                {
-                    "name": "test_invalid_password",
-                    "description": "Verify error message with invalid password",
-                    "steps": [
-                        f"Navigate to {self.config.LOGIN_URL}",
-                        f"Enter username: {self.config.TEST_USERNAME}",
-                        "Enter invalid password",
-                        "Click login button",
-                        "Verify error message"
-                    ]
-                }
-            ])
+            test_cases.extend(
+                [
+                    {
+                        "name": "test_invalid_username",
+                        "description": "Verify error message with invalid username",
+                        "steps": [
+                            f"Navigate to {self.config.LOGIN_URL}",
+                            "Enter invalid username",
+                            f"Enter password: {self.config.TEST_PASSWORD}",
+                            "Click login button",
+                            "Verify error message",
+                        ],
+                    },
+                    {
+                        "name": "test_invalid_password",
+                        "description": "Verify error message with invalid password",
+                        "steps": [
+                            f"Navigate to {self.config.LOGIN_URL}",
+                            f"Enter username: {self.config.TEST_USERNAME}",
+                            "Enter invalid password",
+                            "Click login button",
+                            "Verify error message",
+                        ],
+                    },
+                ]
+            )
 
         return test_cases
 

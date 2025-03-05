@@ -189,7 +189,7 @@ def test_with_real_page():
     crawler = WebCrawler()
     try:
         page_data = crawler.extract_page_data(url)
-        save_json(page_data, "./output/page_data.json")
+        save_json(page_data, "./output/page_data/test_page_data.json")
 
         # Check if valid data was extracted
         if "error" in page_data:
@@ -204,7 +204,7 @@ def test_with_real_page():
             # Analyze page
             logger.info("Analyzing page with LLM...")
             analysis = analyzer.analyze_page(page_data)
-            save_json(analysis, "./output/analysis_result.json")
+            save_json(analysis, "./output/analysis/test_analysis_result.json")
 
             # Generate test script
             logger.info("Generating test scripts...")
@@ -213,15 +213,15 @@ def test_with_real_page():
 
             # Also save the actual script files
             if "feature_file" in test_script:
-                with open("generated_test.feature", "w") as f:
+                with open("./output/test_scripts/test_generated_test.feature", "w") as f:
                     f.write(test_script["feature_file"])
 
             if "step_definitions" in test_script:
-                with open("generated_steps.java", "w") as f:
+                with open("./output/test_scripts/test_generated_steps.java", "w") as f:
                     f.write(test_script["step_definitions"])
 
             if "page_object" in test_script:
-                with open("generated_page.java", "w") as f:
+                with open("./output/test_scripts/test_generated_page.java", "w") as f:
                     f.write(test_script["page_object"])
 
             logger.info("Testing completed successfully!")

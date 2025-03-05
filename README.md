@@ -12,8 +12,9 @@ An automated framework that uses LLMs to generate smoke tests for web applicatio
   - [🚀 Quick Setup](#-quick-setup)
   - [🗂️ Project Structure](#️-project-structure)
   - [🔧 Implementation Details](#-implementation-details)
-    - [LLM Analyzer](#llm-analyzer)
-    - [Web Crawler](#web-crawler)
+    - [Core - LLM Analyzer](#core---llm-analyzer)
+    - [Core - Web Crawler](#core---web-crawler)
+    - [Core - Test Generator](#core---test-generator)
   - [⚙️ Usage](#️-usage)
     - [End-to-End Process](#end-to-end-process)
     - [Individual Steps](#individual-steps)
@@ -33,21 +34,15 @@ An automated framework that uses LLMs to generate smoke tests for web applicatio
 1. **Clone the repository:**
 
 ```bash
-git clone https://github.com/yourusername/llm-smoke-test-framework.git
+git clone https://github.com/Friend09/llm-smoke-test-framework
 cd llm-smoke-test-framework
 ```
 
-2. **Run the setup script:**
+1. **Create and activate a virtual environment:**
 
 ```bash
-python setup.py
-```
-
-3. **Create and activate a virtual environment:**
-
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows, use: venv\Scripts\activate
+python -m venv .venv
+source .venv/bin/activate  # On Windows, use: .venv\Scripts\activate
 ```
 
 4. **Install dependencies:**
@@ -59,7 +54,7 @@ pip install -r requirements.txt
 5. **Configure environment variables:**
 
 ```bash
-cp .env.example .env
+touch .env
 ```
 
 Example `.env` configuration:
@@ -75,7 +70,7 @@ OUTPUT_DIR=output
 # LLM settings
 OPENAI_API_KEY=<YOUR API KEY>
 LLM_MODEL=gpt-4o-mini
-LLM_TEMPERATURE=0.7
+LLM_TEMPERATURE=0.0
 LLM_MAX_TOKENS=2000
 ```
 
@@ -87,23 +82,28 @@ llm-smoke-test-framework/
 ├── core/              # Core functionality
 ├── output/            # Generated outputs
 ├── tests/             # Tests
-├── .env.example       # Environment variables template
 ├── requirements.txt   # Project dependencies
 └── run.py            # Main entry point
 ```
 
 ## 🔧 Implementation Details
 
-### LLM Analyzer
+### Core - LLM Analyzer
 
 - `analyze_page`: Processes crawler data through LLM
 - `generate_test_script`: Creates test scripts from analysis
 - `_generate_cucumber_script`: Handles Cucumber-specific generation
 
-### Web Crawler
+### Core - Web Crawler
 
 - `extract_page_data`: Extracts page elements and structure
 - `save_page_data`: Stores extracted data in JSON format
+
+### Core - Test Generator
+
+- `generate_tests`: Generate test scripts for discovered pages
+- `generate_login_tests`: Generate login-specific test cases
+- `_generate_test_suite`: Generate a test suite file that includes all tests.
 
 ## ⚙️ Usage
 
