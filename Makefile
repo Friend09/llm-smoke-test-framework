@@ -13,9 +13,8 @@ help:
 	@echo "  install    - Install the package in development mode"
 	@echo "  package    - Build package for distribution"
 
-setup:
+install:
 	pip install -r requirements.txt
-	pip install -r requirements-dev.txt
 
 test:
 	pytest tests/
@@ -44,7 +43,7 @@ clean:
 	find . -type d -name "*.egg-info" -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 
-install:
+setup:
 	pip install -e .
 
 package:

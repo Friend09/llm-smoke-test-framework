@@ -228,9 +228,15 @@ class LLMAnalyzer:
             The code should follow best practices for the {language} framework and include appropriate comments.
             Handle potential errors and edge cases.
 
-            IMPORTANT: Your response MUST be valid JSON that can be parsed by the provided format instructions.
-            Do not include any explanation or text outside of the JSON structure.
-            Make sure to escape any special characters in the code, particularly backslashes and quotes.
+            CRITICAL: Your response MUST be valid JSON that follows this structure exactly:
+            {{
+            "feature_file": "Feature: ... (full feature file content)",
+            "step_definitions": "package ... (full step definitions code)",
+            "page_object": "package ... (full page object code)"
+            }}
+
+            Make sure to properly escape all quotes and special characters in the code.
+            Do not add any explanation text outside of this JSON structure.
 
             {format_instructions}
             """
@@ -273,6 +279,9 @@ class LLMAnalyzer:
                 parsed_output = output_parser.parse(response.content)
             except Exception as parse_error:
                 logger.error(f"JSON parsing error: {str(parse_error)}")
+
+                # Log the actual response content for debugging
+                logger.debug(f"Response content: {response.content}")
 
                 # Fall back to simple extraction of code blocks
                 content = response.content
