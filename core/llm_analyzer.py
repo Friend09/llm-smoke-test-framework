@@ -9,6 +9,8 @@ from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain.output_parsers import StructuredOutputParser, ResponseSchema
 from config.config import Config
+from openai import OpenAI
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -36,118 +38,747 @@ class LLMAnalyzer:
             max_tokens=self.config.LLM_MAX_TOKENS,
         )
 
+        # Direct OpenAI client for vision capabilities
+        self.openai_client = OpenAI(api_key=self.config.OPENAI_API_KEY)
+
     def analyze_page(self, page_data):
-        """
-        Analyze page data to identify key elements for testing.
+        """Analyze page data to identify key elements for testing."""
+        try:
+            # More aggressive data simplification
+            def truncate_text(text, max_length=500):
+                return text[:max_length] if isinstance(text, str) and len(text) > max_length else text
 
-        Args:
-            page_data (dict): Page data extracted by the crawler
+            # Create a simplified version of the page data to stay within token limits
+            simplified_data = {
+                "url": page_data.get("url", ""),
+                "title": page_data.get("title", ""),
+            }
 
-        Returns:
-            dict: Analysis results with test recommendations
-        """
-        # Set up the response schema for structured output
-        response_schemas = [
-            ResponseSchema(
-                name="page_title_validation",
-                description="Text that should be present in the page title to validate correct page loading",
-            ),
-            ResponseSchema(
-                name="unique_identifiers",
-                description="List of unique elements that can be used to verify the page loaded correctly",
-            ),
-            ResponseSchema(
-                name="key_elements",
-                description="List of key interactive elements that should be verified",
-            ),
-            ResponseSchema(
-                name="smoke_test_steps",
-                description="Step-by-step smoke test procedure for this page",
-            ),
-            ResponseSchema(
-                name="locator_strategies",
-                description="Recommended locator strategies for important elements",
-            ),
-        ]
+            # Process elements - only keep key interactive elements
+            if "elements" in page_data:
+                # Sort elements by importance (prefer elements with IDs, then with text content)
+                def element_importance(elem):
+                    has_id = elem.get('id', '') != ''
+                    has_text = elem.get('text', '') != ''
+                    has_name = elem.get('name', '') != ''
+                    interactive = elem.get('tag', '') in ['button', 'a', 'input', 'select']
+                    return (interactive, has_id, has_text, has_name)
 
-        output_parser = StructuredOutputParser.from_response_schemas(response_schemas)
-        format_instructions = output_parser.get_format_instructions()
+                elements = page_data.get("elements", [])
+                sorted_elements = sorted(elements, key=element_importance, reverse=True)
 
-        # Prepare the prompt
-        prompt = ChatPromptTemplate.from_template(
-            """
-            You are an expert in automated testing for web applications.
+                # Take the top N elements and simplify them
+                simplified_elements = []
+                for elem in sorted_elements[:10]:  # Limit to top 10 elements
+                    simple_elem = {}
+                    # Only keep the most important attributes
+                    for key in ['id', 'tag', 'type', 'name', 'text', 'class']:
+                        if key in elem and elem[key]:
+                            # Truncate text values to reduce token count
+                            if isinstance(elem[key], str) and len(elem[key]) > 100:
+                                simple_elem[key] = elem[key][:100] + "..."
+                            else:
+                                simple_elem[key] = elem[key]
+                    simplified_elements.append(simple_elem)
 
-            Analyze the following page data and provide recommendations for smoke testing.
+                simplified_data["elements"] = simplified_elements
+
+            # Process forms - very important for testing
+            if "forms" in page_data:
+                forms = page_data.get("forms", [])
+                simplified_forms = []
+                for form in forms[:3]:  # Limit to top 3 forms
+                    simple_form = {
+                        "id": form.get("id", ""),
+                        "action": form.get("action", ""),
+                        "method": form.get("method", ""),
+                        "inputs": []
+                    }
+                    # Process form inputs
+                    for input_field in form.get("inputs", [])[:5]:  # Limit to top 5 inputs per form
+                        simple_input = {}
+                        for key in ['id', 'name', 'type', 'required']:
+                            if key in input_field and input_field[key]:
+                                simple_input[key] = input_field[key]
+                        simple_form["inputs"].append(simple_input)
+                    simplified_forms.append(simple_form)
+
+                simplified_data["forms"] = simplified_forms
+
+            # Process headings - helpful for understanding page structure
+            if "headings" in page_data:
+                headings = page_data.get("headings", [])
+                simplified_headings = []
+                for heading in headings[:5]:  # Limit to top 5 headings
+                    simplified_headings.append({
+                        "level": heading.get("level", ""),
+                        "text": truncate_text(heading.get("text", ""), 100)
+                    })
+                simplified_data["headings"] = simplified_headings
+
+            # Prepare the prompt for analysis
+            prompt_template = """
+            You are an expert in web testing. Analyze this webpage data to generate smoke test information.
 
             PAGE URL: {url}
             PAGE TITLE: {title}
 
-            INTERACTIVE ELEMENTS:
-            {interactive_elements}
+            {elements_info}
 
-            FRAMES DETECTED:
-            {frames}
+            {forms_info}
 
-            FORMS DETECTED:
-            {forms}
+            {headings_info}
 
-            HEADINGS STRUCTURE:
-            {headings}
+            Provide the following information:
+            1. Key elements that should be tested
+            2. Unique identifiers for the page
+            3. Recommended smoke test steps
+            4. Suggested locator strategies (prioritize IDs, then unique selectors)
 
-            Based on this information, provide:
-            1. What text should be present in the page title to validate correct page loading
-            2. Unique identifiers or elements that can be used to verify the page loaded correctly
-            3. Key interactive elements that should be verified for a smoke test
-            4. Step-by-step smoke test procedure for this page
-            5. Recommended locator strategies for the important elements
-
-            {format_instructions}
+            Focus on the most important user flows for this specific page type.
+            Do not assume this is a login page unless clearly indicated by the elements.
             """
-        )
 
-        # Format the input data
-        interactive_elements_str = json.dumps(page_data.get("elements", []), indent=2)
-        frames_str = json.dumps(page_data.get("frames", []), indent=2)
-        forms_str = json.dumps(page_data.get("forms", []), indent=2)
-        headings_str = json.dumps(page_data.get("headings", []), indent=2)
+            # Format element info
+            elements_info = "ELEMENTS:\n"
+            for elem in simplified_data.get("elements", []):
+                elements_info += f"- {elem.get('tag', '')}"
+                if elem.get('id'):
+                    elements_info += f" id='{elem.get('id')}'"
+                if elem.get('type'):
+                    elements_info += f" type='{elem.get('type')}'"
+                if elem.get('text'):
+                    elements_info += f" text='{elem.get('text')}'"
+                elements_info += "\n"
 
-        # Create the formatted prompt
-        formatted_prompt = prompt.format_messages(
-            url=page_data["url"],
-            title=page_data["title"],
-            interactive_elements=interactive_elements_str,
-            frames=frames_str,
-            forms=forms_str,
-            headings=headings_str,
-            format_instructions=format_instructions,
-        )
+            # Format form info
+            forms_info = "FORMS:\n"
+            for form in simplified_data.get("forms", []):
+                forms_info += f"- Form"
+                if form.get('id'):
+                    forms_info += f" id='{form.get('id')}'"
+                forms_info += f" method='{form.get('method', '')}'\n"
+                for input_field in form.get("inputs", []):
+                    forms_info += f"  - Input"
+                    if input_field.get('id'):
+                        forms_info += f" id='{input_field.get('id')}'"
+                    if input_field.get('type'):
+                        forms_info += f" type='{input_field.get('type')}'"
+                    if input_field.get('name'):
+                        forms_info += f" name='{input_field.get('name')}'"
+                    forms_info += "\n"
 
-        try:
-            # Get response from LLM
+            # Format headings info
+            headings_info = "HEADINGS:\n"
+            for heading in simplified_data.get("headings", []):
+                headings_info += f"- H{heading.get('level', '')}: {heading.get('text', '')}\n"
+
+            # Format the prompt
+            formatted_prompt = prompt_template.format(
+                url=simplified_data.get("url", ""),
+                title=simplified_data.get("title", ""),
+                elements_info=elements_info,
+                forms_info=forms_info,
+                headings_info=headings_info
+            )
+
+            # Get LLM response
+            logger.info(f"Sending analysis request to LLM for {simplified_data.get('url', '')}")
             response = self.llm.invoke(formatted_prompt)
 
-            # Parse the structured output
-            parsed_output = output_parser.parse(response.content)
-
-            # Add additional metadata
-            parsed_output["url"] = page_data["url"]
-            parsed_output["title"] = page_data["title"]
-
-            return parsed_output
+            # Process the response
+            return self._process_analysis_response(response.content, simplified_data)
 
         except Exception as e:
             logger.error(f"Error analyzing page with LLM: {str(e)}")
             return {
-                "url": page_data["url"],
-                "title": page_data["title"],
+                "url": page_data.get("url", ""),
+                "title": page_data.get("title", ""),
                 "error": str(e),
-                "page_title_validation": page_data["title"],
+                "page_title_validation": page_data.get("title", ""),
                 "unique_identifiers": [],
                 "key_elements": [],
                 "smoke_test_steps": ["Error generating smoke test steps"],
                 "locator_strategies": {},
             }
+
+    def _process_analysis_response(self, response_content, page_data):
+        """Process the LLM response to extract structured information."""
+        analysis_result = {
+            "url": page_data.get("url", ""),
+            "title": page_data.get("title", ""),
+            "page_title_validation": page_data.get("title", ""),
+            "unique_identifiers": [],
+            "key_elements": [],
+            "smoke_test_steps": [],
+            "locator_strategies": {},
+        }
+
+        # Extract key elements
+        if "Key elements" in response_content:
+            elements_section = self._extract_section(response_content, "Key elements", ["Unique identifiers", "Recommended smoke", "Suggested locator"])
+            elements = []
+            for line in elements_section.split("\n"):
+                if line.strip().startswith("-") or line.strip().startswith("*"):
+                    elements.append(line.strip()[2:].strip())
+            analysis_result["key_elements"] = elements
+
+        # Extract unique identifiers
+        if "Unique identifiers" in response_content:
+            identifiers_section = self._extract_section(response_content, "Unique identifiers", ["Key elements", "Recommended smoke", "Suggested locator"])
+            identifiers = []
+            for line in identifiers_section.split("\n"):
+                if line.strip().startswith("-") or line.strip().startswith("*"):
+                    identifiers.append(line.strip()[2:].strip())
+            analysis_result["unique_identifiers"] = identifiers
+
+        # Extract smoke test steps
+        if "Recommended smoke test steps" in response_content:
+            steps_section = self._extract_section(response_content, "Recommended smoke test steps", ["Key elements", "Unique identifiers", "Suggested locator"])
+            steps = []
+            for line in steps_section.split("\n"):
+                if line.strip().startswith("-") or line.strip().startswith("*") or line.strip().startswith("1.") or line.strip().startswith("2."):
+                    # Remove list markers (-, *, 1., etc.)
+                    cleaned_step = re.sub(r'^[\-\*\d\.]+\s*', '', line.strip())
+                    if cleaned_step:
+                        steps.append(cleaned_step)
+            analysis_result["smoke_test_steps"] = steps
+
+        # Extract locator strategies
+        if "Suggested locator strategies" in response_content:
+            locators_section = self._extract_section(response_content, "Suggested locator strategies", ["Key elements", "Unique identifiers", "Recommended smoke"])
+            locators = {}
+            for line in locators_section.split("\n"):
+                if ":" in line and (line.strip().startswith("-") or line.strip().startswith("*")):
+                    parts = line.strip()[2:].split(":", 1)
+                    if len(parts) == 2:
+                        element_name = parts[0].strip()
+                        locator = parts[1].strip()
+                        locators[element_name] = locator
+            analysis_result["locator_strategies"] = locators
+
+        return analysis_result
+
+    def _extract_section(self, text, section_name, other_sections):
+        """Extract a section from the text based on section name and other section markers."""
+        # Find the start of the section
+        start_idx = text.find(section_name)
+        if start_idx == -1:
+            return ""
+
+        # Skip to the content after the section name
+        start_idx = text.find("\n", start_idx)
+        if start_idx == -1:
+            return ""
+
+        # Find the end of the section (next section or end of text)
+        end_idx = len(text)
+        for other_section in other_sections:
+            section_idx = text.find(other_section, start_idx)
+            if section_idx != -1 and section_idx < end_idx:
+                end_idx = section_idx
+
+        # Extract the section content
+        section_content = text[start_idx:end_idx].strip()
+        return section_content
+
+    def analyze_page_with_vision(self, page_data):
+        """
+        Analyze page with enhanced vision-based analysis in steps:
+        1. Capture screenshot if not already present
+        2. Visual analysis of screenshot using vision capabilities
+        3. DOM structure analysis
+        4. Combine visual and DOM insights
+        """
+        try:
+            # Step 1: Ensure we have a screenshot
+            if "screenshot_path" not in page_data or not os.path.exists(page_data["screenshot_path"]):
+                logger.info("Screenshot not found in page data. Capturing screenshot.")
+                screenshot_path = self._capture_screenshot(page_data)
+                if screenshot_path:
+                    page_data["screenshot_path"] = screenshot_path
+                else:
+                    logger.warning("Failed to capture screenshot. Proceeding with DOM-only analysis.")
+                    return self.analyze_page(page_data)
+
+            # Step 2: Analyze screenshot with vision capabilities
+            logger.info(f"Starting vision analysis of screenshot: {page_data['screenshot_path']}")
+            visual_analysis = self._analyze_screenshot(page_data["screenshot_path"])
+
+            if not visual_analysis:
+                logger.warning("Vision analysis failed or returned empty results. Proceeding with DOM-only analysis.")
+                return self.analyze_page(page_data)
+
+            # Step 3: Get DOM structure analysis with reduced data
+            logger.info("Starting DOM structure analysis")
+            dom_analysis = self._analyze_dom_structure(page_data)
+
+            # Step 4: Combine analyses for comprehensive insights
+            logger.info("Combining vision and DOM analyses")
+            combined_analysis = self._combine_analyses(visual_analysis, dom_analysis)
+
+            return combined_analysis
+
+        except Exception as e:
+            logger.error(f"Error in vision-enhanced analysis: {str(e)}", exc_info=True)
+            logger.info("Falling back to standard DOM analysis")
+            return self.analyze_page(page_data)
+
+    def _capture_screenshot(self, page_data):
+        """
+        Capture a screenshot if driver is available, otherwise return None.
+        """
+        try:
+            # Check if we have access to a WebDriver instance
+            from selenium import webdriver
+            from selenium.webdriver.chrome.options import Options
+            from selenium.webdriver.chrome.service import Service
+
+            # Create output directory for screenshots if it doesn't exist
+            screenshot_dir = os.path.join(self.config.OUTPUT_DIR, "screenshots")
+            os.makedirs(screenshot_dir, exist_ok=True)
+
+            # Generate a safe filename from the URL
+            from urllib.parse import urlparse
+            url = page_data.get("url", "unknown_page")
+            parsed_url = urlparse(url)
+            filename = parsed_url.netloc.replace(".", "_") + parsed_url.path.replace("/", "_")
+            if not filename:
+                filename = "unknown_page"
+
+            screenshot_path = os.path.join(screenshot_dir, f"{filename}.png")
+
+            # Initialize Chrome in headless mode
+            chrome_options = Options()
+            chrome_options.add_argument("--headless")
+            chrome_options.add_argument("--window-size=1920,1080")
+
+            service = None
+            if self.config.CHROME_DRIVER_PATH:
+                service = Service(executable_path=self.config.CHROME_DRIVER_PATH)
+
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+
+            # Navigate to the URL and capture screenshot
+            driver.get(url)
+            driver.save_screenshot(screenshot_path)
+            driver.quit()
+
+            logger.info(f"Captured screenshot: {screenshot_path}")
+            return screenshot_path
+
+        except Exception as e:
+            logger.error(f"Failed to capture screenshot: {str(e)}", exc_info=True)
+            return None
+
+    def _analyze_screenshot(self, screenshot_path: str) -> dict:
+        """
+        Analyze screenshot using GPT-4o-mini's vision capabilities to identify visual elements and layout.
+        """
+        try:
+            if not os.path.exists(screenshot_path):
+                logger.error(f"Screenshot file not found: {screenshot_path}")
+                return {}
+
+            # Prepare the image for analysis
+            with open(screenshot_path, "rb") as image_file:
+                import base64
+                # We'll keep this for compatibility with other parts of the code
+                screenshot_base64 = base64.b64encode(image_file.read()).decode()
+
+            logger.info(f"Analyzing screenshot with vision capabilities: {screenshot_path}")
+
+            # Create the prompt for visual analysis
+            prompt = """
+            Analyze this webpage screenshot for smoke testing purposes. Identify:
+
+            1. Main UI sections and their layout
+            2. Interactive elements (buttons, forms, links, inputs)
+            3. Navigation elements and their positions
+            4. Potential test scenarios based on visual elements
+            5. Suggested element locators (IDs, classes, or XPaths)
+
+            Format your response with these sections:
+            - VISUAL_SECTIONS: List the main visual sections
+            - INTERACTIVE_ELEMENTS: List interactive elements with descriptions
+            - TEST_SCENARIOS: Suggest 3-5 smoke test scenarios
+            - ELEMENT_LOCATORS: Suggest locator strategies for key elements
+            """
+
+            # Use the OpenAI client directly with vision capabilities
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4o-mini",  # Using vision-capable model
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{screenshot_base64}",
+                                },
+                            },
+                        ],
+                    }
+                ],
+                max_tokens=self.config.VISUAL_ANALYSIS_TOKENS,
+            )
+
+            # Extract the content from the response
+            analysis_text = response.choices[0].message.content
+            logger.info("Screenshot analysis completed successfully")
+
+            # Parse the structured sections from the response
+            return {
+                "visual_sections": self._extract_sections_from_response(analysis_text),
+                "visual_elements": self._extract_elements_from_response(analysis_text),
+                "test_scenarios": self._extract_test_scenarios_from_response(analysis_text),
+                "element_locators": self._extract_locators_from_response(analysis_text),
+                "raw_analysis": analysis_text  # Store the full analysis for reference
+            }
+
+        except Exception as e:
+            logger.error(f"Error analyzing screenshot with vision: {str(e)}", exc_info=True)
+            return {}
+
+    def _extract_test_scenarios_from_response(self, response: str) -> list:
+        """Extract test scenarios from the formatted response."""
+        try:
+            if "TEST_SCENARIOS" in response:
+                scenarios_section = response.split("TEST_SCENARIOS:")[1].split("ELEMENT_LOCATORS:")[0]
+                scenarios = [s.strip() for s in scenarios_section.strip().split("\n") if s.strip()]
+                return [s[2:] if s.startswith("- ") else s for s in scenarios]
+            return []
+        except Exception:
+            return []
+
+    def _extract_locators_from_response(self, response: str) -> dict:
+        """Extract element locators from the formatted response."""
+        try:
+            locators = {}
+            if "ELEMENT_LOCATORS" in response:
+                locators_section = response.split("ELEMENT_LOCATORS:")[1].strip()
+                lines = [l.strip() for l in locators_section.split("\n") if l.strip()]
+
+                for line in lines:
+                    if ":" in line and line.startswith("- "):
+                        line = line[2:]  # Remove the list marker
+                        parts = line.split(":", 1)
+                        if len(parts) == 2:
+                            element_name = parts[0].strip()
+                            locator = parts[1].strip()
+                            locators[element_name] = locator
+
+            return locators
+        except Exception:
+            return {}
+
+    def _analyze_dom_structure(self, page_data: dict) -> dict:
+        """Analyze DOM structure with minimal data."""
+        try:
+            # Use existing analyze_page but with reduced scope
+            simplified_data = {
+                "url": page_data["url"],
+                "title": page_data["title"],
+                "elements": self._simplify_elements_for_analysis(page_data.get("elements", []), max_elements=3),
+                "forms": self._simplify_elements_for_analysis(page_data.get("forms", []), max_elements=2)
+            }
+
+            # Analyze with reduced prompt
+            dom_prompt = ChatPromptTemplate.from_template(
+                """
+                Analyze these DOM elements and identify key testing points.
+                Focus only on the most critical elements.
+                {format_instructions}
+                """
+            )
+
+            return self.analyze_page(simplified_data)
+        except Exception as e:
+            logger.error(f"Error in DOM structure analysis: {str(e)}", exc_info=True)
+            return {}
+
+    def _simplify_elements_for_analysis(self, elements, max_elements=3):
+        """Helper method to simplify elements for DOM analysis."""
+        if not isinstance(elements, list):
+            return []
+
+        # Sort elements by importance (prefer elements with IDs, then with text content)
+        def element_importance(elem):
+            has_id = elem.get('id', '') != ''
+            has_text = elem.get('text', '') != ''
+            has_name = elem.get('name', '') != ''
+            return (has_id, has_text, has_name)
+
+        sorted_elements = sorted(elements, key=element_importance, reverse=True)
+
+        # Take the top N elements
+        simplified = []
+        for elem in sorted_elements[:max_elements]:
+            simple_elem = {}
+            # Only keep the most important attributes
+            for key in ['id', 'tag', 'type', 'name', 'text', 'class']:
+                if key in elem and elem[key]:
+                    # Truncate text values to reduce token count
+                    if isinstance(elem[key], str) and len(elem[key]) > 100:
+                        simple_elem[key] = elem[key][:100] + "..."
+                    else:
+                        simple_elem[key] = elem[key]
+            simplified.append(simple_elem)
+
+        return simplified
+
+    def _combine_analyses(self, visual_analysis: dict, dom_analysis: dict) -> dict:
+        """
+        Combine visual and DOM analyses for comprehensive insights.
+
+        Args:
+            visual_analysis: Results from screenshot vision analysis
+            dom_analysis: Results from DOM structure analysis
+
+        Returns:
+            dict: Combined analysis with enhanced test recommendations
+        """
+        # Start with the DOM analysis as base
+        combined = dom_analysis.copy() if dom_analysis else {}
+
+        # Add or enhance with visual insights
+        if visual_analysis:
+            # Add visual sections if not in DOM analysis
+            if "visual_sections" in visual_analysis and visual_analysis["visual_sections"]:
+                combined["page_sections"] = visual_analysis["visual_sections"]
+
+            # Enhance element identification with visual elements
+            if "visual_elements" in visual_analysis and visual_analysis["visual_elements"]:
+                if "key_elements" not in combined:
+                    combined["key_elements"] = []
+                combined["key_elements"].extend(visual_analysis["visual_elements"])
+                # Remove duplicates
+                combined["key_elements"] = list(set(combined["key_elements"]))
+
+            # Add test scenarios from visual analysis
+            if "test_scenarios" in visual_analysis and visual_analysis["test_scenarios"]:
+                combined["test_scenarios"] = visual_analysis["test_scenarios"]
+
+            # Add element locators from visual analysis
+            if "element_locators" in visual_analysis and visual_analysis["element_locators"]:
+                if "locator_strategies" not in combined:
+                    combined["locator_strategies"] = {}
+                combined["locator_strategies"].update(visual_analysis["element_locators"])
+
+            # Generate enhanced test steps
+            if "test_scenarios" in visual_analysis and visual_analysis["test_scenarios"]:
+                combined["smoke_test_steps"] = self._generate_combined_test_steps(
+                    visual_analysis,
+                    combined.get("smoke_test_steps", [])
+                )
+
+            # Add the raw analysis for reference
+            if "raw_analysis" in visual_analysis:
+                combined["vision_analysis"] = visual_analysis["raw_analysis"]
+
+        return combined
+
+    def _extract_sections_from_response(self, response: str) -> list:
+        """Extract section information from visual analysis response."""
+        sections = []
+        # Simple extraction logic - can be enhanced
+        for line in response.split('\n'):
+            if any(keyword in line.lower() for keyword in ['section', 'layout', 'area', 'region']):
+                sections.append(line.strip())
+        return sections
+
+    def _extract_elements_from_response(self, response: str) -> list:
+        """Extract element information from visual analysis response."""
+        elements = []
+        # Simple extraction logic - can be enhanced
+        for line in response.split('\n'):
+            if any(keyword in line.lower() for keyword in ['button', 'input', 'link', 'form', 'menu']):
+                elements.append(line.strip())
+        return elements
+
+    def _generate_combined_test_steps(self, visual_analysis, dom_steps):
+        """
+        Generate combined test steps from visual analysis and DOM steps.
+
+        Args:
+            visual_analysis (dict): Visual analysis results
+            dom_steps (list): DOM-based test steps
+
+        Returns:
+            list: Combined test steps
+        """
+        combined_steps = []
+
+        # Add test scenarios from visual analysis
+        if "test_scenarios" in visual_analysis and visual_analysis["test_scenarios"]:
+            # Convert scenarios to steps
+            for scenario in visual_analysis["test_scenarios"]:
+                # Split multi-step scenarios
+                if " and " in scenario:
+                    parts = scenario.split(" and ")
+                    for part in parts:
+                        combined_steps.append(part.strip())
+                else:
+                    combined_steps.append(scenario)
+
+        # Add steps from DOM analysis if not duplicative
+        for step in dom_steps:
+            # Check if step is substantively similar to any existing step
+            is_duplicate = False
+            for existing_step in combined_steps:
+                if self._are_steps_similar(step, existing_step):
+                    is_duplicate = True
+                    break
+
+            if not is_duplicate:
+                combined_steps.append(step)
+
+        # If no steps, add a basic fallback step
+        if not combined_steps:
+            combined_steps = ["Verify page loads correctly", "Check page title is as expected"]
+
+        return combined_steps
+
+    def _are_steps_similar(self, step1, step2):
+        """
+        Determine if two test steps are substantively similar.
+
+        Args:
+            step1 (str): First test step
+            step2 (str): Second test step
+
+        Returns:
+            bool: True if steps are similar, False otherwise
+        """
+        # Convert to lowercase for comparison
+        s1 = step1.lower()
+        s2 = step2.lower()
+
+        # Check for high similarity
+        if s1 == s2:
+            return True
+
+        # Check if one is a substring of the other
+        if s1 in s2 or s2 in s1:
+            return True
+
+        # Check if they have similar keywords
+        important_keywords = ["verify", "check", "validate", "enter", "click", "submit", "login", "select"]
+        for keyword in important_keywords:
+            if keyword in s1 and keyword in s2:
+                # Check for additional context similarity
+                s1_words = set(s1.split())
+                s2_words = set(s2.split())
+                common_words = s1_words.intersection(s2_words)
+
+                # If they share a significant number of words, consider them similar
+                if len(common_words) >= 3 or len(common_words) / len(s1_words.union(s2_words)) > 0.5:
+                    return True
+
+        return False
+
+    def _analyze_layout(self, page_data):
+        """Analyze layout based on DOM structure and positioning."""
+        layout_analysis = {
+            "sections": page_data.get("logical_sections", []),
+            "hierarchy": self._extract_hierarchy_info(page_data.get("dom_structure", {})),
+            "recommendations": []
+        }
+
+        # Add recommendations based on layout
+        if page_data.get("forms"):
+            layout_analysis["recommendations"].append("Verify form layout and field alignment")
+
+        if page_data.get("headings"):
+            layout_analysis["recommendations"].append("Validate heading hierarchy and visibility")
+
+        return layout_analysis
+
+    def _extract_hierarchy_info(self, dom_structure):
+        """Extract useful hierarchy information from DOM structure."""
+        if not dom_structure:
+            return {}
+
+        return {
+            "main_elements": self._get_main_elements(dom_structure),
+            "interactive_elements": self._get_interactive_elements(dom_structure)
+        }
+
+    def _get_main_elements(self, structure):
+        """Get main structural elements."""
+        main_elements = []
+        if isinstance(structure, dict):
+            tag = structure.get("tag", "")
+            if tag in ["main", "header", "footer", "nav", "section", "article"]:
+                main_elements.append({
+                    "tag": tag,
+                    "id": structure.get("id"),
+                    "class": structure.get("class")
+                })
+
+            # Recursively check children
+            for child in structure.get("children", []):
+                main_elements.extend(self._get_main_elements(child))
+
+        return main_elements
+
+    def _get_interactive_elements(self, structure):
+        """Get interactive elements with their context."""
+        interactive = []
+        if isinstance(structure, dict):
+            tag = structure.get("tag", "")
+            if tag in ["button", "a", "input", "select", "textarea"]:
+                interactive.append({
+                    "tag": tag,
+                    "type": structure.get("type"),
+                    "id": structure.get("id"),
+                    "text": structure.get("text")
+                })
+
+            # Recursively check children
+            for child in structure.get("children", []):
+                interactive.extend(self._get_interactive_elements(child))
+
+        return interactive
+
+    def _update_test_strategies(self, analysis):
+        """
+        Update test strategies based on visual analysis.
+
+        Args:
+            analysis (dict): Combined analysis data
+        """
+        if "visual_analysis" not in analysis:
+            return
+
+        try:
+            # Extract visual insights
+            visual_insights = analysis["visual_analysis"]
+
+            # Update smoke test steps with visual validations
+            updated_steps = []
+            for step in analysis.get("smoke_test_steps", []):
+                updated_steps.append(step)
+
+                # Add visual validation steps
+                if "click" in step.lower() or "submit" in step.lower():
+                    updated_steps.append("Verify visual state after interaction")
+
+            analysis["smoke_test_steps"] = updated_steps
+
+            # Add visual locator strategies
+            if "locator_strategies" not in analysis:
+                analysis["locator_strategies"] = {}
+
+            analysis["locator_strategies"]["visual"] = {
+                "layout_based": "Use relative positioning for dynamic elements",
+                "visual_anchors": "Use stable visual elements as anchors"
+            }
+
+        except Exception as e:
+            logger.error(f"Error updating test strategies: {str(e)}")
 
     def generate_test_script(self, page_analysis, framework="cucumber"):
         """
@@ -167,35 +798,157 @@ class LLMAnalyzer:
             return {"error": f"Unsupported framework: {framework}"}
 
 
-    def _generate_cucumber_script(self, page_analysis):
+    def _generate_cucumber_script(self, page_analysis, language="java"):
         """
-        Generate Cucumber/Gherkin test script.
+        Generate Cucumber script (feature file, step definitions, page object).
 
         Args:
-            page_analysis (dict): Analysis results from analyze_page
+            page_analysis (dict): Page analysis
+            language (str): Programming language
 
         Returns:
-            dict: Generated Cucumber script files
+            dict: Generated scripts
         """
-        # Set up the response schema for structured output
-        response_schemas = [
-            ResponseSchema(
-                name="feature_file",
-                description="Gherkin feature file content for testing this page",
-            ),
-            ResponseSchema(
-                name="step_definitions",
-                description="Step definitions implementation (for your existing framework)",
-            ),
-            ResponseSchema(
-                name="page_object",
-                description="Page object model implementation for this page",
-            ),
-        ]
+        try:
+            # Setup response schemas
+            response_schemas = [
+                ResponseSchema(
+                    name="feature_file",
+                    description="Cucumber feature file with scenarios based on page analysis",
+                    type="string",
+                ),
+                ResponseSchema(
+                    name="step_definitions",
+                    description=f"Step definitions in {language} to implement the scenarios",
+                    type="string",
+                ),
+                ResponseSchema(
+                    name="page_object",
+                    description=f"Page object in {language} for interacting with UI elements",
+                    type="string",
+                ),
+            ]
 
-        output_parser = StructuredOutputParser.from_response_schemas(response_schemas)
-        format_instructions = output_parser.get_format_instructions()
+            # Setup output parser
+            output_parser = StructuredOutputParser.from_response_schemas(response_schemas)
+            format_instructions = output_parser.get_format_instructions()
 
+            # Format the prompt with the page analysis
+            formatted_prompt = self._format_test_generation_prompt(
+                page_analysis,
+                language=language,
+                format_instructions=format_instructions,
+            )
+
+            try:
+                # Get response from LLM
+                response = self.llm.invoke(formatted_prompt)
+
+                try:
+                    # Try to parse the structured output
+                    parsed_output = output_parser.parse(response.content)
+                except Exception as parse_error:
+                    logger.error(f"JSON parsing error: {str(parse_error)}")
+
+                    # Log the actual response content for debugging
+                    logger.debug(f"Response content: {response.content}")
+
+                    # Fall back to simple extraction of code blocks
+                    content = response.content
+                    feature_file = ""
+                    step_definitions = ""
+                    page_object = ""
+
+                    # Try to extract code blocks with regex
+                    import re
+
+                    # Look for feature file (Gherkin syntax)
+                    feature_match = re.search(r"```gherkin\n(.*?)```", content, re.DOTALL)
+                    if feature_match:
+                        feature_file = feature_match.group(1)
+                    else:
+                        feature_match = re.search(r"```feature\n(.*?)```", content, re.DOTALL)
+                        if feature_match:
+                            feature_file = feature_match.group(1)
+                        else:
+                            # Look for content that looks like a feature file
+                            for line in content.split("\n"):
+                                if line.startswith("Feature:") or line.startswith("Scenario:"):
+                                    # Extract the whole block
+                                    start_idx = content.find(line)
+                                    feature_block = content[start_idx:]
+                                    end_idx = feature_block.find("```")
+                                    if end_idx > 0:
+                                        feature_file = feature_block[:end_idx].strip()
+                                    else:
+                                        feature_file = line
+                                    break
+
+                    # Look for Java code blocks
+                    java_blocks = re.findall(r"```java\n(.*?)```", content, re.DOTALL)
+
+                    # If we found Java blocks, try to determine which is which
+                    if len(java_blocks) >= 2:
+                        for block in java_blocks:
+                            if "class" in block and ("Page" in block or "PO" in block):
+                                page_object = block
+                            elif "Given" in block or "When" in block or "Then" in block:
+                                step_definitions = block
+
+                        # If we couldn't distinguish, just assign them in order
+                        if not page_object and len(java_blocks) > 0:
+                            page_object = java_blocks[0]
+                        if not step_definitions and len(java_blocks) > 1:
+                            step_definitions = java_blocks[1]
+
+                    # Create a fallback parsed output
+                    parsed_output = {
+                        "feature_file": feature_file or "# Error extracting feature file",
+                        "step_definitions": step_definitions or "// Error extracting step definitions",
+                        "page_object": page_object or "// Error extracting page object",
+                    }
+
+                # Add metadata
+                parsed_output["url"] = page_analysis.get("url", "")
+                parsed_output["title"] = page_analysis.get("title", "")
+                parsed_output["language"] = language
+
+                return parsed_output
+
+            except Exception as e:
+                logger.error(f"Error generating Cucumber script: {str(e)}")
+                return {
+                    "url": page_analysis.get("url", ""),
+                    "title": page_analysis.get("title", ""),
+                    "error": str(e),
+                    "feature_file": f"# Error generating feature file: {str(e)}",
+                    "step_definitions": f"// Error generating step definitions: {str(e)}",
+                    "page_object": f"// Error generating page object: {str(e)}",
+                }
+
+        except Exception as outer_e:
+            logger.error(f"Outer error in Cucumber script generation: {str(outer_e)}")
+            return {
+                "url": page_analysis.get("url", ""),
+                "title": page_analysis.get("title", ""),
+                "error": str(outer_e),
+                "feature_file": "# Error in test generation",
+                "step_definitions": "// Error in test generation",
+                "page_object": "// Error in test generation",
+            }
+
+    def _format_test_generation_prompt(self, page_analysis, language="java", format_instructions=""):
+        """
+        Format the test generation prompt with page analysis data.
+
+        Args:
+            page_analysis (dict): Page analysis data
+            language (str): Programming language for implementation
+            format_instructions (str): Format instructions for the output parser
+
+        Returns:
+            list: Formatted messages for the LLM
+        """
         # Prepare the prompt with extra emphasis on proper JSON formatting
         prompt = ChatPromptTemplate.from_template(
             """
@@ -206,13 +959,17 @@ class LLMAnalyzer:
             PAGE URL: {url}
             PAGE TITLE: {title}
 
-            PAGE TITLE VALIDATION: {page_title_validation}
+            PAGE ANALYSIS:
+            {page_analysis_summary}
 
             UNIQUE IDENTIFIERS:
             {unique_identifiers}
 
             KEY ELEMENTS:
             {key_elements}
+
+            TEST SCENARIOS:
+            {test_scenarios}
 
             SMOKE TEST STEPS:
             {smoke_test_steps}
@@ -225,134 +982,48 @@ class LLMAnalyzer:
             2. Step definitions that implement the feature file steps
             3. A page object model for this page
 
-            The code should follow best practices for the {language} framework and include appropriate comments.
-            Handle potential errors and edge cases.
-
-            CRITICAL: Your response MUST be valid JSON that follows this structure exactly:
-            {{
-            "feature_file": "Feature: ... (full feature file content)",
-            "step_definitions": "package ... (full step definitions code)",
-            "page_object": "package ... (full page object code)"
-            }}
-
-            Make sure to properly escape all quotes and special characters in the code.
-            Do not add any explanation text outside of this JSON structure.
+            IMPORTANT GUIDELINES:
+            - Do NOT assume this is a login page unless explicitly mentioned in the analysis
+            - Create tests based on the actual page purpose and elements discovered
+            - The code should follow best practices for the {language} framework and include appropriate comments
+            - Handle potential errors and edge cases
+            - Keep scenarios focused on main user flows for the specific page type
 
             {format_instructions}
             """
         )
 
-        # Determine the language based on framework preference
-        language = "Java"  # Default
+        # Extract page information
+        url = page_analysis.get("url", "")
+        title = page_analysis.get("title", "")
 
-        # Format the input data
-        unique_identifiers_str = json.dumps(
-            page_analysis.get("unique_identifiers", []), indent=2
-        )
+        # Create a summary from vision analysis if available
+        vision_analysis = page_analysis.get("vision_analysis", "")
+        page_analysis_summary = vision_analysis[:500] if vision_analysis else "No vision analysis available"
+
+        # Prepare test scenarios from either source
+        test_scenarios = page_analysis.get("test_scenarios", [])
+        if not test_scenarios and "smoke_test_steps" in page_analysis:
+            # Create scenarios from steps if dedicated scenarios not available
+            test_scenarios = ["Verify " + step for step in page_analysis.get("smoke_test_steps", [])[:3]]
+
+        # Format data for the prompt
+        unique_identifiers_str = json.dumps(page_analysis.get("unique_identifiers", []), indent=2)
         key_elements_str = json.dumps(page_analysis.get("key_elements", []), indent=2)
-        smoke_test_steps_str = json.dumps(
-            page_analysis.get("smoke_test_steps", []), indent=2
-        )
-        locator_strategies_str = json.dumps(
-            page_analysis.get("locator_strategies", {}), indent=2
-        )
+        test_scenarios_str = json.dumps(test_scenarios, indent=2)
+        smoke_test_steps_str = json.dumps(page_analysis.get("smoke_test_steps", []), indent=2)
+        locator_strategies_str = json.dumps(page_analysis.get("locator_strategies", {}), indent=2)
 
         # Create the formatted prompt
-        formatted_prompt = prompt.format_messages(
-            url=page_analysis["url"],
-            title=page_analysis["title"],
-            page_title_validation=page_analysis.get("page_title_validation", ""),
+        return prompt.format_messages(
+            url=url,
+            title=title,
+            page_analysis_summary=page_analysis_summary,
             unique_identifiers=unique_identifiers_str,
             key_elements=key_elements_str,
+            test_scenarios=test_scenarios_str,
             smoke_test_steps=smoke_test_steps_str,
             locator_strategies=locator_strategies_str,
             language=language,
             format_instructions=format_instructions,
         )
-
-        try:
-            # Get response from LLM
-            response = self.llm.invoke(formatted_prompt)
-
-            try:
-                # Try to parse the structured output
-                parsed_output = output_parser.parse(response.content)
-            except Exception as parse_error:
-                logger.error(f"JSON parsing error: {str(parse_error)}")
-
-                # Log the actual response content for debugging
-                logger.debug(f"Response content: {response.content}")
-
-                # Fall back to simple extraction of code blocks
-                content = response.content
-                feature_file = ""
-                step_definitions = ""
-                page_object = ""
-
-                # Try to extract code blocks with regex
-                import re
-
-                # Look for feature file (Gherkin syntax)
-                feature_match = re.search(r"```gherkin\n(.*?)```", content, re.DOTALL)
-                if feature_match:
-                    feature_file = feature_match.group(1)
-                else:
-                    feature_match = re.search(r"```feature\n(.*?)```", content, re.DOTALL)
-                    if feature_match:
-                        feature_file = feature_match.group(1)
-                    else:
-                        # Look for content that looks like a feature file
-                        for line in content.split("\n"):
-                            if line.startswith("Feature:") or line.startswith("Scenario:"):
-                                # Extract the whole block
-                                start_idx = content.find(line)
-                                feature_block = content[start_idx:]
-                                end_idx = feature_block.find("```")
-                                if end_idx > 0:
-                                    feature_file = feature_block[:end_idx].strip()
-                                else:
-                                    feature_file = line
-                                break
-
-                # Look for Java code blocks
-                java_blocks = re.findall(r"```java\n(.*?)```", content, re.DOTALL)
-
-                # If we found Java blocks, try to determine which is which
-                if len(java_blocks) >= 2:
-                    for block in java_blocks:
-                        if "class" in block and ("Page" in block or "PO" in block):
-                            page_object = block
-                        elif "Given" in block or "When" in block or "Then" in block:
-                            step_definitions = block
-
-                    # If we couldn't distinguish, just assign them in order
-                    if not page_object and len(java_blocks) > 0:
-                        page_object = java_blocks[0]
-                    if not step_definitions and len(java_blocks) > 1:
-                        step_definitions = java_blocks[1]
-
-                # Create a fallback parsed output
-                parsed_output = {
-                    "feature_file": feature_file or "# Error extracting feature file",
-                    "step_definitions": step_definitions
-                    or "// Error extracting step definitions",
-                    "page_object": page_object or "// Error extracting page object",
-                }
-
-            # Add metadata
-            parsed_output["url"] = page_analysis["url"]
-            parsed_output["title"] = page_analysis["title"]
-            parsed_output["language"] = language
-
-            return parsed_output
-
-        except Exception as e:
-            logger.error(f"Error generating Cucumber script: {str(e)}")
-            return {
-                "url": page_analysis["url"],
-                "title": page_analysis["title"],
-                "error": str(e),
-                "feature_file": f"# Error generating feature file: {str(e)}",
-                "step_definitions": f"// Error generating step definitions: {str(e)}",
-                "page_object": f"// Error generating page object: {str(e)}",
-            }

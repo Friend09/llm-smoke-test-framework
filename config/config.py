@@ -11,45 +11,58 @@ load_dotenv()
 class Config:
     """Configuration for the LLM Smoke Test Framework."""
 
-    # OpenAI API settings
-    OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY", "")
-    LLM_MODEL: str = os.environ.get("LLM_MODEL", "gpt-4o-mini")
-    LLM_TEMPERATURE: float = float(os.environ.get("LLM_TEMPERATURE", "0.0"))
-    LLM_MAX_TOKENS: int = int(os.environ.get("LLM_MAX_TOKENS", "2000"))
-
     # Crawler settings
-    CHROME_DRIVER_PATH: Optional[str] = os.environ.get("CHROME_DRIVER_PATH")
-    HEADLESS: bool = os.environ.get("HEADLESS", "True").lower() == "true"
-    PAGE_LOAD_TIMEOUT: int = int(os.environ.get("PAGE_LOAD_TIMEOUT", "30"))
+    HEADLESS: bool = True
+    PAGE_LOAD_TIMEOUT: int = 30
+    CAPTURE_SCREENSHOTS: bool = True
+    ANALYZE_LAYOUT: bool = True
+    CHROME_DRIVER_PATH: Optional[str] = None
 
     # Output settings
-    OUTPUT_DIR: str = os.environ.get("OUTPUT_DIR", "output")
-    PAGE_DATA_DIR: str = os.environ.get("PAGE_DATA_DIR", "page_data")
-    ANALYSIS_DIR: str = os.environ.get("ANALYSIS_DIR", "analysis")
-    TEST_SCRIPTS_DIR: str = os.environ.get("TEST_SCRIPTS_DIR", "test_scripts")
+    OUTPUT_DIR: str = "output"
+    BASE_URL: str = ""  # Base URL for the application under test
 
-    def validate(self) -> bool:
-        """Validate the configuration settings."""
+    # LLM settings
+    OPENAI_API_KEY: Optional[str] = None
+    LLM_MODEL: str = "gpt-4o-mini"  # Using non-vision model
+    LLM_TEMPERATURE: float = 0.0
+    LLM_MAX_TOKENS: int = 500  # Further reduced for split analysis
+    LLM_MAX_CONTEXT: int = 8000  # Maximum context size for mini model
+    VISUAL_ANALYSIS_TOKENS: int = 300  # Specific limit for visual analysis
+
+    def __post_init__(self):
+        """Load configuration from environment variables."""
+        # Load from environment variables
+        self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", self.OPENAI_API_KEY)
+        self.CHROME_DRIVER_PATH = os.getenv("CHROME_DRIVER_PATH", self.CHROME_DRIVER_PATH)
+        self.OUTPUT_DIR = os.getenv("OUTPUT_DIR", self.OUTPUT_DIR)
+        self.BASE_URL = os.getenv("BASE_URL", self.BASE_URL)
+        self.LLM_MODEL = os.getenv("LLM_MODEL", self.LLM_MODEL)
+        self.LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", str(self.LLM_TEMPERATURE)))
+        self.LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", str(self.LLM_MAX_TOKENS)))
+
+        # Create output directories
+        self._create_output_directories()
+
+        self.validate()
+
+    def validate(self):
+        """Validate configuration."""
         if not self.OPENAI_API_KEY:
-            raise ValueError("OPENAI_API_KEY is required")
+            raise ValueError("OPENAI_API_KEY must be set")
 
-        # Create output directories if they don't exist
-        for dir_name in [self.OUTPUT_DIR,
-                         f"{self.OUTPUT_DIR}/{self.PAGE_DATA_DIR}",
-                         f"{self.OUTPUT_DIR}/{self.ANALYSIS_DIR}",
-                         f"{self.OUTPUT_DIR}/{self.TEST_SCRIPTS_DIR}"]:
-            os.makedirs(dir_name, exist_ok=True)
+    def _create_output_directories(self):
+        """Create all required output directories."""
+        directories = {
+            "page_data_path": os.path.join(self.OUTPUT_DIR, "page_data"),
+            "analysis_path": os.path.join(self.OUTPUT_DIR, "analysis"),
+            "test_scripts_path": os.path.join(self.OUTPUT_DIR, "test_scripts"),
+            "screenshots_path": os.path.join(self.OUTPUT_DIR, "screenshots")
+        }
 
-        return True
+        for path in directories.values():
+            os.makedirs(path, exist_ok=True)
 
-    @property
-    def page_data_path(self) -> str:
-        return f"{self.OUTPUT_DIR}/{self.PAGE_DATA_DIR}"
-
-    @property
-    def analysis_path(self) -> str:
-        return f"{self.OUTPUT_DIR}/{self.ANALYSIS_DIR}"
-
-    @property
-    def test_scripts_path(self) -> str:
-        return f"{self.OUTPUT_DIR}/{self.TEST_SCRIPTS_DIR}"
+        # Add directory paths as properties
+        for name, path in directories.items():
+            setattr(self, name, path)

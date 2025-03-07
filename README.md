@@ -17,6 +17,7 @@ An automated framework that uses LLMs to generate smoke tests for web applicatio
     - [Core - Test Generator](#core---test-generator)
   - [⚙️ Usage](#️-usage)
     - [End-to-End Process](#end-to-end-process)
+    - [Vision-Enhanced Testing](#vision-enhanced-testing)
     - [Individual Steps](#individual-steps)
   - [📤 Output](#-output)
   - [🤝 Contributing](#-contributing)
@@ -26,6 +27,8 @@ An automated framework that uses LLMs to generate smoke tests for web applicatio
 
 - **Automated Test Generation:** Leverages LLMs to create robust smoke tests
 - **Web Crawling:** Discovers and extracts key elements from web pages
+- **Vision Capabilities:** Uses GPT-4o-mini's vision capabilities for enhanced UI analysis
+- **Error Handling and Robustness:** Improved error handling and fallback mechanisms for increased reliability
 - **Configurable:** Easily adaptable to different testing frameworks and environments
 - **Modular Design:** Supports individual step execution for customized workflows
 
@@ -38,20 +41,20 @@ git clone https://github.com/Friend09/llm-smoke-test-framework
 cd llm-smoke-test-framework
 ```
 
-1. **Create and activate a virtual environment:**
+2. **Create and activate a virtual environment:**
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # On Windows, use: .venv\Scripts\activate
 ```
 
-4. **Install dependencies:**
+3. **Install dependencies:**
 
 ```bash
 pip install -r requirements.txt
 ```
 
-5. **Configure environment variables:**
+4. **Configure environment variables:**
 
 ```bash
 touch .env
@@ -91,8 +94,9 @@ llm-smoke-test-framework/
 ### Core - LLM Analyzer
 
 - `analyze_page`: Processes crawler data through LLM
+- `analyze_page_with_vision`: Uses GPT-4o-mini's vision capabilities for enhanced analysis
 - `generate_test_script`: Creates test scripts from analysis
-- `_generate_cucumber_script`: Handles Cucumber-specific generation
+- `_generate_combined_test_steps`: Combines test steps from visual and DOM analysis
 
 ### Core - Web Crawler
 
@@ -112,6 +116,24 @@ llm-smoke-test-framework/
 ```bash
 python run.py e2e https://example.com
 ```
+
+### Vision-Enhanced Testing
+
+The framework now supports vision-enhanced testing using GPT-4o-mini's vision capabilities:
+
+```bash
+# Run end-to-end process with vision capabilities
+python run.py vision-e2e https://example.com
+
+# Analyze a specific page with vision capabilities
+python run.py vision https://example.com
+```
+
+Vision-enhanced testing provides several benefits:
+- Better understanding of page layout and visual elements
+- Improved element locator strategies based on visual context
+- More comprehensive test scenarios that consider visual relationships
+- Enhanced ability to test complex UI components
 
 ### Individual Steps
 
@@ -141,6 +163,9 @@ python run.py generate output/analysis/example_com_home_analysis.json
    - Cucumber features
    - Step definitions
    - Page objects
+
+4. **Error Handling**
+   - Detailed logs and fallback mechanisms for robust testing
 
 ## 🤝 Contributing
 
