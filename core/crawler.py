@@ -129,7 +129,12 @@ class WebCrawler:
 
                 # Capture screenshots if requested
                 if with_screenshots:
-                    self._capture_screenshots(page_data)
+                    logger.info(f"Screenshot capture requested for {url}")
+                    try:
+                        self._capture_screenshots(page_data)
+                        logger.info(f"Screenshots captured successfully. Path: {page_data.get('screenshot_path')}")
+                    except Exception as screenshot_error:
+                        logger.error(f"Error capturing screenshots: {str(screenshot_error)}")
 
                 # Add HTML content (truncated to avoid token issues)
                 page_source = self.driver.page_source
@@ -235,9 +240,10 @@ class WebCrawler:
     def _capture_screenshots(self, page_data):
         """Capture full page and element screenshots."""
 
-        # Capture full page screenshot
+        # Create screenshots directory if it doesn't exist
         screenshot_dir = os.path.join(self.config.OUTPUT_DIR, "screenshots")
         os.makedirs(screenshot_dir, exist_ok=True)
+        logger.debug(f"Screenshot directory: {screenshot_dir}")
 
         # Generate a safe filename from URL
         from urllib.parse import urlparse
@@ -248,11 +254,21 @@ class WebCrawler:
         if not path:
             path = "home"
         filename = f"{domain}_{path}.png"
-
-        # Save full page screenshot
         full_page_path = os.path.join(screenshot_dir, filename)
-        self.driver.save_screenshot(full_page_path)
-        page_data["screenshot_path"] = full_page_path
+
+        logger.info(f"Capturing full page screenshot to {full_page_path}")
+
+        try:
+            # Save full page screenshot
+            self.driver.save_screenshot(full_page_path)
+            if os.path.exists(full_page_path):
+                logger.info(f"Screenshot saved successfully: {os.path.getsize(full_page_path)} bytes")
+            else:
+                logger.error("Screenshot file wasn't created")
+            page_data["screenshot_path"] = full_page_path
+        except Exception as e:
+            logger.error(f"Error saving full page screenshot: {str(e)}", exc_info=True)
+            raise
 
         # Optionally capture screenshots of key elements (forms, buttons, etc.)
         element_screenshots = {}
@@ -475,7 +491,7 @@ class WebCrawler:
         for step in steps:
             try:
                 step = step.strip()
-                if not step:
+                if not step or step.startswith('#'):  # Skip empty lines or comments
                     continue
 
                 step_result = {"description": step, "success": False}
@@ -501,7 +517,9 @@ class WebCrawler:
                         step_result["success"] = True
 
                 # Take screenshot after each step
-                screenshot_path = f"{self.config.OUTPUT_DIR}/screenshots/step_{len(page_data['user_flow'])}.png"
+                screenshot_dir = os.path.join(self.config.OUTPUT_DIR, "screenshots")
+                os.makedirs(screenshot_dir, exist_ok=True)
+                screenshot_path = os.path.join(screenshot_dir, f"step_{len(page_data['user_flow'])}.png")
                 self.driver.save_screenshot(screenshot_path)
                 step_result["screenshot"] = screenshot_path
 
@@ -518,10 +536,185 @@ class WebCrawler:
 
             except Exception as e:
                 logger.error(f"Error executing step '{step}': {str(e)}")
-                step_result["error"] = str(e)
+                step_result = {"description": step, "success": False, "error": str(e)}
                 page_data["user_flow"].append(step_result)
 
         return page_data
+
+    def _click_element(self, element_description):
+        """Find and click an element based on description.
+
+        Args:
+            element_description (str): Description of the element to click
+        """
+        element = self._find_element_by_description(element_description)
+        if element:
+            logger.info(f"Clicking element: {element_description}")
+            element.click()
+            # Wait a moment for any page changes to occur
+            time.sleep(1)
+        else:
+            raise ValueError(f"Element not found: {element_description}")
+
+    def _type_text(self, element_description, text):
+        """Type text into an input field.
+
+        Args:
+            element_description (str): Description of the input element
+            text (str): Text to type
+        """
+        element = self._find_element_by_description(element_description)
+        if element:
+            logger.info(f"Typing '{text}' into: {element_description}")
+            element.clear()
+            element.send_keys(text)
+        else:
+            raise ValueError(f"Input element not found: {element_description}")
+
+    def _select_option(self, element_description, option_text):
+        """Select an option from a dropdown.
+
+        Args:
+            element_description (str): Description of the select element
+            option_text (str): Option text to select
+        """
+        from selenium.webdriver.support.ui import Select
+
+        element = self._find_element_by_description(element_description)
+        if element:
+            logger.info(f"Selecting '{option_text}' from: {element_description}")
+            select = Select(element)
+            try:
+                select.select_by_visible_text(option_text)
+            except:
+                # Try to find by partial text
+                options = select.options
+                for option in options:
+                    if option_text.lower() in option.text.lower():
+                        select.select_by_visible_text(option.text)
+                        return
+                raise ValueError(f"Option '{option_text}' not found in dropdown")
+        else:
+            raise ValueError(f"Select element not found: {element_description}")
+
+    def _find_element_by_description(self, description):
+        """Find an element based on text description.
+
+        This method tries various strategies to locate an element:
+        1. By exact text content
+        2. By partial text content
+        3. By placeholder
+        4. By ID
+        5. By name
+        6. By label text
+        7. By CSS class containing the description
+
+        Args:
+            description (str): Element description (e.g. "login button", "username field")
+
+        Returns:
+            WebElement or None: Found element or None if not found
+        """
+        description = description.lower().strip()
+
+        # Common terms that might indicate element types
+        button_terms = ["button", "btn", "submit", "cancel", "save", "login", "sign in"]
+        input_terms = ["field", "input", "textbox", "text box", "username", "password", "email"]
+
+        # Try to find by visible text (exact)
+        try:
+            # Direct match for button text
+            element = self.driver.find_element(By.XPATH, f"//*[normalize-space(text())='{description}']")
+            return element
+        except:
+            pass
+
+        # Try to find button by partial text
+        try:
+            element = self.driver.find_element(By.XPATH, f"//button[contains(normalize-space(text()),'{description}')]")
+            return element
+        except:
+            pass
+
+        # Try to find link by partial text
+        try:
+            element = self.driver.find_element(By.XPATH, f"//a[contains(normalize-space(text()),'{description}')]")
+            return element
+        except:
+            pass
+
+        # Try to find by ID containing the description
+        try:
+            element = self.driver.find_element(By.XPATH, f"//*[contains(@id,'{description}')]")
+            return element
+        except:
+            pass
+
+        # Try to find by name attribute
+        try:
+            element = self.driver.find_element(By.XPATH, f"//*[contains(@name,'{description}')]")
+            return element
+        except:
+            pass
+
+        # Try to find by placeholder
+        try:
+            element = self.driver.find_element(By.XPATH, f"//input[contains(@placeholder,'{description}')]")
+            return element
+        except:
+            pass
+
+        # Try to find input by associated label
+        try:
+            element = self.driver.find_element(By.XPATH, f"//label[contains(text(),'{description}')]//following::input[1]")
+            return element
+        except:
+            pass
+
+        # Determine if we're likely looking for a button
+        is_likely_button = any(term in description for term in button_terms)
+        is_likely_input = any(term in description for term in input_terms)
+
+        # Try finding button by type and value
+        if is_likely_button:
+            try:
+                element = self.driver.find_element(By.XPATH, f"//button[contains(text(),'{description.replace('button', '')}')]")
+                return element
+            except:
+                pass
+
+            try:
+                element = self.driver.find_element(By.XPATH, f"//input[@type='submit' or @type='button'][contains(@value,'{description}')]")
+                return element
+            except:
+                pass
+
+        # Try finding input by type
+        if is_likely_input:
+            input_type = ""
+            if "password" in description:
+                input_type = "password"
+            elif "email" in description:
+                input_type = "email"
+            elif "username" in description or "user" in description:
+                input_type = "text"
+
+            if input_type:
+                try:
+                    element = self.driver.find_element(By.XPATH, f"//input[@type='{input_type}']")
+                    return element
+                except:
+                    pass
+
+        # Last resort: try to find any element containing the text
+        try:
+            element = self.driver.find_element(By.XPATH, f"//*[contains(text(),'{description}')]")
+            return element
+        except:
+            pass
+
+        logger.warning(f"Could not find element: {description}")
+        return None
 
     def save_page_data(self, page_data: Dict[str, Any], filename: Optional[str] = None) -> str:
         """

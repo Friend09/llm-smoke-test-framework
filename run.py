@@ -32,8 +32,9 @@ def parse_arguments():
     # Vision Analysis command
     vision_parser = subparsers.add_parser('vision', help='Analyze page with vision capabilities')
     vision_parser.add_argument('url', help='URL to crawl')
-    vision_parser.add_argument('-o', '--output', help='Output directory')
-    vision_parser.add_argument('--with-flow', help='User flow description file')
+    vision_parser.add_argument('-o', '--output', help='Output filename')
+    vision_parser.add_argument('-f', '--with-flow', dest='with_flow', help='User flow description file')
+    vision_parser.add_argument('-s', '--with-screenshots', action='store_true', help='Force new screenshot capture')
 
     # Vision End-to-End command
     vision_e2e_parser = subparsers.add_parser('vision-e2e', help='End-to-end process using vision capabilities')
@@ -41,7 +42,8 @@ def parse_arguments():
     vision_e2e_parser.add_argument('-f', '--framework', default='cucumber',
                                   help='Test framework (default: cucumber)')
     vision_e2e_parser.add_argument('-o', '--output', help='Output directory prefix')
-    vision_e2e_parser.add_argument('--with-flow', help='User flow description file')
+    vision_e2e_parser.add_argument('-w', '--with-flow', dest='with_flow', help='User flow description file')
+    vision_e2e_parser.add_argument('-l', '--language', default='java', help='Programming language (default: java)')
 
     # Crawl command
     crawl_parser = subparsers.add_parser('crawl', help='Crawl a webpage and extract data')
@@ -54,12 +56,15 @@ def parse_arguments():
     analyze_parser.add_argument('input', help='Input page data JSON file')
     analyze_parser.add_argument('-o', '--output', help='Output filename')
     analyze_parser.add_argument('--use-vision', action='store_true', help='Use vision capabilities')
+    analyze_parser.add_argument('--verbose', action='store_true', help='Show detailed analysis')
 
     # Generate command
     generate_parser = subparsers.add_parser('generate', help='Generate test scripts')
     generate_parser.add_argument('input', help='Input analysis JSON file')
     generate_parser.add_argument('-f', '--framework', default='cucumber',
                                 help='Test framework (default: cucumber)')
+    generate_parser.add_argument('-l', '--language', default='java',
+                                help='Programming language (default: java)')
     generate_parser.add_argument('-o', '--output', help='Output directory')
     generate_parser.add_argument('--use-vision', action='store_true', help='Use vision-based generation')
 
@@ -68,25 +73,40 @@ def parse_arguments():
     e2e_parser.add_argument('url', help='URL to crawl')
     e2e_parser.add_argument('-f', '--framework', default='cucumber',
                            help='Test framework (default: cucumber)')
+    e2e_parser.add_argument('-l', '--language', default='java',
+                           help='Programming language (default: java)')
     e2e_parser.add_argument('-o', '--output', help='Output directory prefix')
     e2e_parser.add_argument('--use-vision', action='store_true', help='Use vision capabilities')
+    e2e_parser.add_argument('--with-screenshots', action='store_true', help='Capture screenshots')
 
     return parser.parse_args()
 
-def crawl_page(config: Config, url: str, output_filename: Optional[str] = None) -> str:
+def crawl_page(config: Config, url: str, output_filename: Optional[str] = None, with_screenshots: bool = False) -> str:
     """Crawl a webpage and extract data.
 
     Args:
         config (Config): Configuration object
         url (str): URL to crawl
         output_filename (Optional[str]): Output filename
+        with_screenshots (bool): Whether to capture screenshots
 
     Returns:
         str: Path to the saved page data file
     """
     crawler = WebCrawler(config)
     try:
-        page_data = crawler.extract_page_data(url)
+        logger.info(f"Starting page crawl with screenshots={with_screenshots}")
+        page_data = crawler.extract_page_data(url, with_screenshots=with_screenshots)
+
+        # Log screenshot path if it exists
+        if with_screenshots and "screenshot_path" in page_data:
+            if os.path.exists(page_data["screenshot_path"]):
+                logger.info(f"Screenshot captured: {page_data['screenshot_path']}")
+            else:
+                logger.warning(f"Screenshot path recorded but file doesn't exist: {page_data['screenshot_path']}")
+        elif with_screenshots:
+            logger.warning("Screenshots were requested but no screenshot_path found in page data")
+
         output_path = crawler.save_page_data(page_data, output_filename)
         return output_path
     finally:
@@ -129,7 +149,8 @@ def generate_test_scripts(
     config: Config,
     input_file: str,
     framework: str = 'cucumber',
-    output_dir: Optional[str] = None
+    output_dir: Optional[str] = None,
+    language: str = 'java'  # Added language parameter with default value
 ) -> Dict[str, str]:
     """Generate test scripts.
 
@@ -138,6 +159,7 @@ def generate_test_scripts(
         input_file (str): Input analysis JSON file
         framework (str): Test framework
         output_dir (Optional[str]): Output directory
+        language (str): Programming language for test implementation
 
     Returns:
         Dict[str, str]: Mapping of file types to their paths
@@ -148,7 +170,7 @@ def generate_test_scripts(
 
     # Generate test scripts
     analyzer = LLMAnalyzer(config)
-    test_scripts = analyzer.generate_test_script(analysis, framework)
+    test_scripts = analyzer.generate_test_script(analysis, framework, language)  # Pass language parameter here
 
     # Determine output directory
     if output_dir is None:
@@ -169,7 +191,7 @@ def generate_test_scripts(
 
     output_files["summary"] = summary_path
 
-    # Save individual files
+    # Save individual files (update to use language-specific file extensions)
     if "feature_file" in test_scripts:
         feature_path = os.path.join(output_dir, "test.feature")
         with open(feature_path, 'w', encoding='utf-8') as f:
@@ -177,13 +199,29 @@ def generate_test_scripts(
         output_files["feature"] = feature_path
 
     if "step_definitions" in test_scripts:
-        steps_path = os.path.join(output_dir, "StepDefinitions.java")
+        # Use appropriate file extension based on language
+        if language.startswith('py'):  # Handle python, python3, etc.
+            file_ext = '.py'
+            filename = "steps_definition"
+        else:
+            file_ext = '.java'
+            filename = "StepDefinitions"
+
+        steps_path = os.path.join(output_dir, f"{filename}{file_ext}")
         with open(steps_path, 'w', encoding='utf-8') as f:
             f.write(test_scripts["step_definitions"])
         output_files["steps"] = steps_path
 
     if "page_object" in test_scripts:
-        page_path = os.path.join(output_dir, "PageObject.java")
+        # Use appropriate file extension based on language
+        if language.startswith('py'):  # Handle python, python3, etc.
+            file_ext = '.py'
+            filename = "page_object"
+        else:
+            file_ext = '.java'
+            filename = "PageObject"
+
+        page_path = os.path.join(output_dir, f"{filename}{file_ext}")
         with open(page_path, 'w', encoding='utf-8') as f:
             f.write(test_scripts["page_object"])
         output_files["page_object"] = page_path
@@ -235,7 +273,7 @@ def process_end_to_end(
 
     return output_files
 
-def analyze_page_with_vision(config: Config, url: str, output_filename: Optional[str] = None, flow_file: Optional[str] = None) -> str:
+def analyze_page_with_vision(config: Config, url: str, output_filename: Optional[str] = None, flow_file: Optional[str] = None, force_screenshot: bool = False) -> str:
     """Analyze page with GPT-4o-mini vision capabilities.
 
     Args:
@@ -243,6 +281,7 @@ def analyze_page_with_vision(config: Config, url: str, output_filename: Optional
         url (str): URL to crawl
         output_filename (Optional[str]): Output filename
         flow_file (Optional[str]): User flow description file
+        force_screenshot (bool): Whether to force a new screenshot capture
 
     Returns:
         str: Path to the saved analysis file
@@ -252,10 +291,19 @@ def analyze_page_with_vision(config: Config, url: str, output_filename: Optional
     try:
         # If flow file is provided, use crawl with user flow
         if flow_file:
+            if not os.path.exists(flow_file):
+                logger.error(f"User flow file not found: {flow_file}")
+                raise FileNotFoundError(f"User flow file not found: {flow_file}")
+
             with open(flow_file, 'r') as f:
                 flow_description = f.read()
+
+            if not flow_description.strip():
+                logger.warning(f"User flow file is empty: {flow_file}")
+
             logger.info(f"Using user flow from {flow_file}")
             page_data = crawler.crawl_with_user_flow(url, flow_description)
+            logger.info(f"User flow execution completed with {len(page_data.get('user_flow', []))} steps")
         else:
             # Regular crawl with screenshots enabled
             logger.info("Capturing page data with screenshots")
@@ -448,31 +496,84 @@ def main():
         config = Config()
 
         if args.command == 'crawl':
-            crawl_page(config, args.url, args.output)
+            logger.info(f"Crawl command with screenshots flag: {args.with_screenshots}")
+            output_path = crawl_page(config, args.url, args.output, with_screenshots=args.with_screenshots)
+            logger.info(f"Crawl completed: {output_path}")
 
         elif args.command == 'analyze':
-            analyze_page_data(config, args.input, args.output)
+            if args.use_vision:
+                logger.info("Running analysis with vision capabilities")
+                # For vision analysis with existing page data, we need to ensure the screenshot exists
+                with open(args.input, 'r', encoding='utf-8') as f:
+                    page_data = json.load(f)
+                if "screenshot_path" not in page_data or not os.path.exists(page_data.get("screenshot_path", "")):
+                    logger.warning("Page data doesn't contain a valid screenshot path. Vision analysis may be limited.")
+
+                # Create an analyzer and use vision capabilities
+                analyzer = LLMAnalyzer(config)
+                analysis = analyzer.analyze_page_with_vision(page_data)
+
+                # Save the analysis
+                if args.output:
+                    output_filename = args.output
+                else:
+                    base_name = os.path.splitext(os.path.basename(args.input))[0]
+                    output_filename = f"{base_name}_vision_analysis.json"
+
+                output_path = os.path.join(config.analysis_path, output_filename)
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    json.dump(analysis, indent=2, fp=f)
+
+                logger.info(f"Vision analysis saved to {output_path}")
+            else:
+                analyze_page_data(config, args.input, args.output)
+
+            if args.verbose and os.path.exists(os.path.join(config.analysis_path, args.output or "")):
+                # Display a summary of the analysis
+                analysis_path = os.path.join(config.analysis_path, args.output)
+                with open(analysis_path, 'r', encoding='utf-8') as f:
+                    analysis = json.load(f)
+
+                logger.info("=== Analysis Summary ===")
+                logger.info(f"URL: {analysis.get('url')}")
+                logger.info(f"Title: {analysis.get('title')}")
+                logger.info(f"Key Elements: {len(analysis.get('key_elements', []))}")
+                logger.info(f"Test Steps: {len(analysis.get('smoke_test_steps', []))}")
+                if analysis.get('smoke_test_steps'):
+                    for i, step in enumerate(analysis.get('smoke_test_steps', []), 1):
+                        logger.info(f"  Step {i}: {step}")
 
         elif args.command == 'generate':
-            generate_test_scripts(config, args.input, args.framework, args.output)
+            language = getattr(args, 'language', 'java')
+            generate_test_scripts(config, args.input, args.framework, args.output, language)  # Pass language here
+            logger.info(f"Generated {args.framework} test scripts in {language}")
 
         elif args.command == 'e2e':
-            output_files = process_end_to_end(config, args.url, args.framework, args.output)
+            # Pass screenshots option from e2e to crawl
+            output_files = process_end_to_end(
+                config,
+                args.url,
+                args.framework,
+                args.output
+            )
             logger.info("End-to-end process completed successfully")
             logger.info("Output files:")
             for file_type, file_path in output_files.items():
                 logger.info(f"  {file_type}: {file_path}")
 
         elif args.command == 'vision':
+            # Pass force_screenshot option to allow forcing new screenshots
             output_file = analyze_page_with_vision(
                 config,
                 args.url,
                 args.output,
-                args.with_flow
+                args.with_flow,
+                force_screenshot=getattr(args, 'with_screenshots', False)
             )
             logger.info(f"Vision analysis completed: {output_file}")
 
         elif args.command == 'vision-e2e':
+            language = getattr(args, 'language', 'java')
             output_files = vision_e2e_process(
                 config,
                 args.url,
@@ -480,7 +581,7 @@ def main():
                 args.output,
                 args.with_flow
             )
-            logger.info("Vision-based end-to-end process completed successfully")
+            logger.info(f"Vision-based end-to-end process completed successfully using {language}")
             logger.info("Output files:")
             for file_type, file_path in output_files.items():
                 logger.info(f"  {file_type}: {file_path}")
@@ -492,7 +593,7 @@ def main():
         return 0
 
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
+        logger.error(f"Error: {str(e)}", exc_info=True)
         return 1
 
 if __name__ == "__main__":

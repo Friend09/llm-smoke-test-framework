@@ -69,7 +69,7 @@ class LLMAnalyzer:
 
                 # Take the top N elements and simplify them
                 simplified_elements = []
-                for elem in sorted_elements[:10]:  # Limit to top 10 elements
+                for elem in sorted_elements[:20]:  # Increased from 10 to 20 elements
                     simple_elem = {}
                     # Only keep the most important attributes
                     for key in ['id', 'tag', 'type', 'name', 'text', 'class']:
@@ -116,27 +116,35 @@ class LLMAnalyzer:
                     })
                 simplified_data["headings"] = simplified_headings
 
-            # Prepare the prompt for analysis
+            # Make the prompt clearer and more structured
             prompt_template = """
-            You are an expert in web testing. Analyze this webpage data to generate smoke test information.
+            I'm an expert web tester analyzing a webpage to generate smoke test information.
 
             PAGE URL: {url}
             PAGE TITLE: {title}
 
+            ELEMENTS:
             {elements_info}
 
+            FORMS:
             {forms_info}
 
+            HEADINGS:
             {headings_info}
 
-            Provide the following information:
-            1. Key elements that should be tested
-            2. Unique identifiers for the page
-            3. Recommended smoke test steps
-            4. Suggested locator strategies (prioritize IDs, then unique selectors)
+            Based on this data, I need to provide:
 
-            Focus on the most important user flows for this specific page type.
-            Do not assume this is a login page unless clearly indicated by the elements.
+            1. KEY ELEMENTS:
+            List the most important elements that should be tested.
+
+            2. UNIQUE IDENTIFIERS:
+            List unique ways to identify this page in tests (title, URL patterns, unique elements).
+
+            3. RECOMMENDED SMOKE TEST STEPS:
+            List 5-10 concise steps for smoke testing this page.
+
+            4. SUGGESTED LOCATOR STRATEGIES:
+            List element: locator pairs for important elements (use best practice selectors).
             """
 
             # Format element info
@@ -186,6 +194,9 @@ class LLMAnalyzer:
             logger.info(f"Sending analysis request to LLM for {simplified_data.get('url', '')}")
             response = self.llm.invoke(formatted_prompt)
 
+            # Log response for debugging
+            logger.debug(f"Raw LLM response: {response.content[:500]}...")
+
             # Process the response
             return self._process_analysis_response(response.content, simplified_data)
 
@@ -196,14 +207,20 @@ class LLMAnalyzer:
                 "title": page_data.get("title", ""),
                 "error": str(e),
                 "page_title_validation": page_data.get("title", ""),
-                "unique_identifiers": [],
+                "unique_identifiers": ["URL: " + page_data.get("url", "")],
                 "key_elements": [],
-                "smoke_test_steps": ["Error generating smoke test steps"],
+                "smoke_test_steps": ["Visit the page and verify it loads",
+                                   f"Check page title is '{page_data.get('title', '')}'"],
                 "locator_strategies": {},
             }
 
     def _process_analysis_response(self, response_content, page_data):
         """Process the LLM response to extract structured information."""
+        logger.info(f"Processing LLM response for {page_data.get('url', '')}")
+
+        # Log the raw response for debugging
+        logger.debug(f"Raw LLM response: {response_content[:1000]}...")
+
         analysis_result = {
             "url": page_data.get("url", ""),
             "title": page_data.get("title", ""),
@@ -214,40 +231,102 @@ class LLMAnalyzer:
             "locator_strategies": {},
         }
 
-        # Extract key elements
+        # Extract key elements - more robust pattern matching
+        key_elements = []
+
+        # Try with labeled sections first
         if "Key elements" in response_content:
             elements_section = self._extract_section(response_content, "Key elements", ["Unique identifiers", "Recommended smoke", "Suggested locator"])
-            elements = []
             for line in elements_section.split("\n"):
                 if line.strip().startswith("-") or line.strip().startswith("*"):
                     elements.append(line.strip()[2:].strip())
-            analysis_result["key_elements"] = elements
 
-        # Extract unique identifiers
+        # Fallback to heuristic extraction based on content if section headers aren't found
+        if not key_elements:
+            # Look for numbered or bullet lists of elements
+            pattern_element = re.compile(r'(?:^|\n)(?:\d+[\.\)]|\*|\-)\s+(.*?)(?=$|\n)', re.MULTILINE)
+            element_matches = pattern_element.findall(response_content)
+
+            # Filter to likely elements (more specific patterns)
+            for match in element_matches:
+                text = match.strip()
+                if any(keyword in text.lower() for keyword in ['button', 'input', 'field', 'form', 'link', 'element']):
+                    key_elements.append(text)
+
+        analysis_result["key_elements"] = key_elements[:10]  # Limit to top 10
+
+        # Extract unique identifiers with enhanced pattern matching
+        identifiers = []
         if "Unique identifiers" in response_content:
             identifiers_section = self._extract_section(response_content, "Unique identifiers", ["Key elements", "Recommended smoke", "Suggested locator"])
-            identifiers = []
             for line in identifiers_section.split("\n"):
                 if line.strip().startswith("-") or line.strip().startswith("*"):
                     identifiers.append(line.strip()[2:].strip())
-            analysis_result["unique_identifiers"] = identifiers
 
-        # Extract smoke test steps
+        # Fallback extraction for identifiers
+        if not identifiers:
+            # Look for ID patterns in the response
+            id_patterns = re.compile(r'(?:id|ID|Id)[\s\:]+[\"\'](#?[\w\-]+)[\"\']\s', re.MULTILINE)
+            id_matches = id_patterns.findall(response_content)
+            identifiers.extend(id_matches)
+
+            # Look for title or URL as identifiers
+            if page_data.get("title"):
+                identifiers.append(f"Page title: {page_data.get('title')}")
+            if page_data.get("url"):
+                identifiers.append(f"URL: {page_data.get('url')}")
+
+        analysis_result["unique_identifiers"] = identifiers[:5]  # Limit to top 5
+
+        # Extract smoke test steps - more robust pattern matching
+        steps = []
         if "Recommended smoke test steps" in response_content:
             steps_section = self._extract_section(response_content, "Recommended smoke test steps", ["Key elements", "Unique identifiers", "Suggested locator"])
-            steps = []
             for line in steps_section.split("\n"):
-                if line.strip().startswith("-") or line.strip().startswith("*") or line.strip().startswith("1.") or line.strip().startswith("2."):
+                if line.strip().startswith("-") or line.strip().startswith("*") or bool(re.match(r'^\d+[\.\)]', line.strip())):
                     # Remove list markers (-, *, 1., etc.)
-                    cleaned_step = re.sub(r'^[\-\*\d\.]+\s*', '', line.strip())
+                    cleaned_step = re.sub(r'^[\-\*\d\.)+\s*]+', '', line.strip())
                     if cleaned_step:
                         steps.append(cleaned_step)
-            analysis_result["smoke_test_steps"] = steps
+
+        # Fallback extraction for steps
+        if not steps:
+            test_keywords = ["verify", "check", "validate", "click", "enter", "navigate", "test", "assert"]
+            for line in response_content.split('\n'):
+                line = line.strip()
+                if any(keyword in line.lower() for keyword in test_keywords) and len(line) > 10:
+                    # Clean up the line to look like a step
+                    if line.startswith("-") or line.startswith("*"):
+                        line = line[1:].strip()
+                    if bool(re.match(r'^\d+[\.\)]', line)):
+                        line = re.sub(r'^\d+[\.\)]', '', line).strip()
+
+                    steps.append(line)
+
+        # If still no steps, generate some basic ones based on the page data
+        if not steps:
+            steps = [
+                f"Navigate to {page_data.get('url', 'the page')}",
+                f"Verify page title is '{page_data.get('title', 'correct')}'",
+                "Check that the page loads without errors"
+            ]
+
+            # Add steps for forms if present
+            if page_data.get("forms"):
+                steps.append("Verify form is displayed")
+                steps.append("Submit the form with valid data")
+
+            # Add steps for buttons if found in elements
+            buttons = [e for e in page_data.get("elements", []) if e.get("tag") == "button" or e.get("type") == "button"]
+            if buttons:
+                steps.append(f"Click the {buttons[0].get('text', 'submit')} button")
+
+        analysis_result["smoke_test_steps"] = steps[:10]  # Limit to top 10
 
         # Extract locator strategies
+        locators = {}
         if "Suggested locator strategies" in response_content:
             locators_section = self._extract_section(response_content, "Suggested locator strategies", ["Key elements", "Unique identifiers", "Recommended smoke"])
-            locators = {}
             for line in locators_section.split("\n"):
                 if ":" in line and (line.strip().startswith("-") or line.strip().startswith("*")):
                     parts = line.strip()[2:].split(":", 1)
@@ -255,27 +334,43 @@ class LLMAnalyzer:
                         element_name = parts[0].strip()
                         locator = parts[1].strip()
                         locators[element_name] = locator
-            analysis_result["locator_strategies"] = locators
 
+        # Fallback locator strategy extraction
+        if not locators:
+            # Generate locators from page elements if available
+            for elem in page_data.get("elements", [])[:5]:  # Just use the top 5 elements
+                elem_name = elem.get("text") or elem.get("name") or elem.get("id") or f"{elem.get('tag', 'element')}_element"
+                if elem.get("id"):
+                    locators[elem_name] = f"By ID: #{elem.get('id')}"
+                elif elem.get("name"):
+                    locators[elem_name] = f"By name: {elem.get('name')}"
+                elif elem.get("class"):
+                    locators[elem_name] = f"By class: .{elem.get('class').split()[0]}"
+                elif elem.get("xpath"):
+                    locators[elem_name] = f"XPath: {elem.get('xpath')}"
+
+        analysis_result["locator_strategies"] = locators
+
+        logger.info(f"Analysis extracted: {len(key_elements)} key elements, {len(steps)} test steps")
         return analysis_result
 
     def _extract_section(self, text, section_name, other_sections):
         """Extract a section from the text based on section name and other section markers."""
         # Find the start of the section
         start_idx = text.find(section_name)
-        if start_idx == -1:
+        if (start_idx == -1):
             return ""
 
         # Skip to the content after the section name
         start_idx = text.find("\n", start_idx)
-        if start_idx == -1:
+        if (start_idx == -1):
             return ""
 
         # Find the end of the section (next section or end of text)
         end_idx = len(text)
         for other_section in other_sections:
             section_idx = text.find(other_section, start_idx)
-            if section_idx != -1 and section_idx < end_idx:
+            if (section_idx != -1 and section_idx < end_idx):
                 end_idx = section_idx
 
         # Extract the section content
@@ -544,7 +639,7 @@ class LLMAnalyzer:
         combined = dom_analysis.copy() if dom_analysis else {}
 
         # Add or enhance with visual insights
-        if visual_analysis:
+        if (visual_analysis):
             # Add visual sections if not in DOM analysis
             if "visual_sections" in visual_analysis and visual_analysis["visual_sections"]:
                 combined["page_sections"] = visual_analysis["visual_sections"]
@@ -780,23 +875,23 @@ class LLMAnalyzer:
         except Exception as e:
             logger.error(f"Error updating test strategies: {str(e)}")
 
-    def generate_test_script(self, page_analysis, framework="cucumber"):
+    def generate_test_script(self, page_analysis, framework="cucumber", language="java"):
         """
         Generate test script based on page analysis.
 
         Args:
             page_analysis (dict): Analysis results from analyze_page
             framework (str): Test framework to generate script for
+            language (str): Programming language for implementation
 
         Returns:
             dict: Generated test script information
         """
         if framework.lower() == "cucumber":
-            return self._generate_cucumber_script(page_analysis)
+            return self._generate_cucumber_script(page_analysis, language)
         else:
             logger.warning(f"Unsupported framework: {framework}")
             return {"error": f"Unsupported framework: {framework}"}
-
 
     def _generate_cucumber_script(self, page_analysis, language="java"):
         """

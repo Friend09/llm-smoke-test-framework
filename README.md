@@ -16,6 +16,7 @@ An automated framework that uses LLMs to generate smoke tests for web applicatio
     - [Core - Web Crawler](#core---web-crawler)
     - [Core - Test Generator](#core---test-generator)
   - [⚙️ Usage](#️-usage)
+    - [Command Reference](#command-reference)
     - [Basic Commands](#basic-commands)
       - [Crawling a Webpage](#crawling-a-webpage)
     - [Analyzing Page Data](#analyzing-page-data)
@@ -121,6 +122,19 @@ llm-smoke-test-framework/
 
 ## ⚙️ Usage
 
+### Command Reference
+
+| Command                  | Description                                                                   |
+| ------------------------ | ----------------------------------------------------------------------------- |
+| `crawl`                  | Extracts elements, forms, and other data from a webpage.                      |
+| `analyze`                | Processes the extracted page data using the LLM to generate analysis results. |
+| `generate`               | Creates test scripts based on the analysis results.                           |
+| `e2e`                    | Runs the end-to-end process for a given URL.                                  |
+| `vision`                 | Analyzes a specific page with vision capabilities.                            |
+| `vision-e2e`             | Runs the end-to-end process with vision capabilities.                         |
+| `vision --with-flow`     | Runs with a predefined user flow.                                             |
+| `vision-e2e --with-flow` | Runs end-to-end process with user flow.                                       |
+
 ### Basic Commands
 
 The framework provides several individual commands that can be run separately or combined as needed.
@@ -158,15 +172,25 @@ python run.py analyze output/page_data/example_com_home.json -o custom_analysis.
 
 ### Generating Test Scripts
 
-The `generate` command creates test scripts based on the analysis results.
+The `generate` command creates comprehensive test scripts based on the analysis results. These scripts can be directly used in your testing framework with minimal adjustments.
 
 ```bash
 # Basic usage
 python run.py generate output/analysis/example_com_home_analysis.json
 
-# Save to specific filename
-python run.py generate output/analysis/example_com_home_analysis.json -o custom_tests.json
+# Generate for a specific test framework and programming language
+python run.py generate output/analysis/example_com_home_analysis.json -f cucumber -l java
+
+# Save to specific directory
+python run.py generate output/analysis/example_com_home_analysis.json -o custom_tests
 ```
+
+**Available options:**
+
+- `-f, --framework`: Test framework to generate (default: cucumber)
+- `-l, --language`: Programming language for test implementation (default: java, others: python3)
+- `-o, --output`: Custom output directory name
+- `--use-vision`: Use vision-enhanced analysis for test generation
 
 **Example output:**
 
@@ -203,27 +227,52 @@ Vision-enhanced testing provides several benefits:
 
 #### User Flow Testing
 
-- The framework supports simulating and analyzing user flows through web applications
-- The framework includes a powerful feature for simulating user interactions through the crawl_with_user_flow method. This allows you to define and execute multi-step user flows to test specific scenarios like login, form submission, or navigation paths.
-- User flow files contain a sequence of actions to perform on the webpage. Each line describes a single action:
+The framework supports simulating and analyzing user flows through web applications using predefined action sequences.
+
+**User Flow File Format:**
+
+- Create a text file containing one action per line. Ensure this text file is saved inside `flows` folder
+  - eg: `flows/login_flow.txt`
+- Each line added inside this file describes a specific browser interaction
+- Empty lines and lines starting with `#` are treated as comments
+
+**Example User Flow File:**
 
 ```text
-# Example user flow file (login_flow.txt)
+# Example: login_flow.txt
+# Path: flows/login_flow.txt
+# Target site: https://practicetestautomation.com/practice-test-login/
+
+# Click the login button to begin
 click login button
-type test@example.com into username field
-type password123 into password field
-click login button
+
+# Enter credentials
+type student into username
+type Password123 into password
+
+# Submit the form
+click submit
 ```
 
-- running w/ userflows file
+**Supported Commands:**
+
+- `click [element description]` - Clicks on an element
+- `type [text] into [element description]` - Enters text into a form field
+- `select [option] from [element description]` - Selects an option from a dropdown
+
+**Running with User Flows:**
+
+Make sure your user flow file is created and properly formatted before running these commands:
 
 ```bash
-# Run with a predefined user flow
+# Analyze with a predefined user flow
 python run.py vision https://example.com --with-flow flows/login_flow.txt
 
 # Run end-to-end process with user flow
 python run.py vision-e2e https://example.com --with-flow flows/login_flow.txt
 ```
+
+**Note:** The user flow file must exist at the specified path when running the command.
 
 ### Working with Test Generator
 

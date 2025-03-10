@@ -1,0 +1,6 @@
+# Example user flow file. login_flow.txt
+# https://practicetestautomation.com/practice-test-login/
+click login button
+type student into username
+type Password123 into password
+click submit
