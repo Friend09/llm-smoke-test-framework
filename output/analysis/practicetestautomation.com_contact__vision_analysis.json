@@ -1,0 +1,32 @@
+{
+  "url": "https://practicetestautomation.com/contact/",
+  "title": "Contact | Practice Test Automation | Selenium WebDriver",
+  "page_title_validation": "Contact | Practice Test Automation | Selenium WebDriver",
+  "unique_identifiers": [],
+  "key_elements": [
+    "1. **Navigation Links**",
+    "- Attempt to submit the form without filling out the required fields (Name and Email) and check for validation messages.",
+    "- Test the form by submitting it with valid input data and verifying that a confirmation or thank you message appears.",
+    "4. **Email Format Validation**",
+    "- Input an invalid email format and verify",
+    "2. **Form Submission**",
+    "- Represents the action to submit the contact form.",
+    "- Verify that each navigation link redirects to the expected page without errors.",
+    "- Instructional text prompting users to fill out the contact form.",
+    "- Contains the logo and navigation links (Home, Practice, Courses, Blog, Contact).",
+    "3. **Contact Form**",
+    "- Fields for input: Name (First and Last), Email, Comment or Message.",
+    "- Submit button (assumed as there is no visual representation).",
+    "- Comment or Message: A text area for user input.",
+    "2. **Input Fields**",
+    "3. **Submit Button**"
+  ],
+  "smoke_test_steps": [],
+  "locator_strategies": {},
+  "page_sections": [
+    "### VISUAL_SECTIONS",
+    "2. **Main Content Area**",
+    "- Comment or Message: A text area for user input."
+  ],
+  "vision_analysis": "### VISUAL_SECTIONS\n1. **Header**\n   - Contains the logo and navigation links (Home, Practice, Courses, Blog, Contact).\n  \n2. **Main Content Area**\n   - Title: \"Contact\"\n   - Image: Circular profile picture.\n   - Instructional text prompting users to fill out the contact form.\n\n3. **Contact Form**\n   - Fields for input: Name (First and Last), Email, Comment or Message.\n   - Submit button (assumed as there is no visual representation).\n\n### INTERACTIVE_ELEMENTS\n1. **Navigation Links**\n   - Home, Practice, Courses, Blog, Contact (each likely redirects to respective pages).\n  \n2. **Input Fields**\n   - Name: Two separate fields for First and Last names.\n   - Email: Single field for the user's email.\n   - Comment or Message: A text area for user input.\n\n3. **Submit Button**\n   - Represents the action to submit the contact form.\n\n### TEST_SCENARIOS\n1. **Navigation Functionality**\n   - Verify that each navigation link redirects to the expected page without errors.\n\n2. **Form Submission**\n   - Test the form by submitting it with valid input data and verifying that a confirmation or thank you message appears.\n\n3. **Required Fields Validation**\n   - Attempt to submit the form without filling out the required fields (Name and Email) and check for validation messages.\n\n4. **Email Format Validation**\n   - Input an invalid email format and verify"
+}

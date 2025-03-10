@@ -2,9 +2,9 @@
 
 This test suite contains smoke tests for the following pages:
 
-## General Pages
+## Form Pages
 
-- [Practice | Practice Test Automation](https://practicetestautomation.com/practice/)
+- [Contact | Practice Test Automation | Selenium WebDriver](https://practicetestautomation.com/contact/)
 
 ## Running the Tests
 
