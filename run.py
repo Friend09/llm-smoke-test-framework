@@ -145,89 +145,53 @@ def analyze_page_data(config: Config, input_file: str, output_filename: Optional
     logger.info(f"Saved analysis to {output_path}")
     return output_path
 
-def generate_test_scripts(
-    config: Config,
-    input_file: str,
-    framework: str = 'cucumber',
-    output_dir: Optional[str] = None,
-    language: str = 'java'  # Added language parameter with default value
-) -> Dict[str, str]:
-    """Generate test scripts.
+def generate_test_scripts(config: Config, analysis_file: str, framework: str = 'cucumber',
+                         language: str = 'java', output_dir: Optional[str] = None,
+                         use_vision: bool = False):
+    """Generate test scripts from analysis results."""
+    logger.info(f"Generating test scripts from {analysis_file}")
+    try:
+        # Load analysis data
+        if not os.path.exists(analysis_file):
+            raise ValueError(f"Analysis file not found: {analysis_file}")
 
-    Args:
-        config (Config): Configuration object
-        input_file (str): Input analysis JSON file
-        framework (str): Test framework
-        output_dir (Optional[str]): Output directory
-        language (str): Programming language for test implementation
+        with open(analysis_file, 'r') as f:
+            analysis_data = json.load(f)
 
-    Returns:
-        Dict[str, str]: Mapping of file types to their paths
-    """
-    # Load analysis
-    with open(input_file, 'r', encoding='utf-8') as f:
-        analysis = json.load(f)
+        # Extract URL from analysis data
+        url = analysis_data.get('url', '')
+        if not url:
+            logger.warning(f"URL not found in analysis data, using filename as fallback")
+            url = os.path.basename(analysis_file).replace('_analysis.json', '')
 
-    # Generate test scripts
-    analyzer = LLMAnalyzer(config)
-    test_scripts = analyzer.generate_test_script(analysis, framework, language)  # Pass language parameter here
+        # Initialize test generator
+        test_gen = TestGenerator(config)
 
-    # Determine output directory
-    if output_dir is None:
-        base_name = os.path.splitext(os.path.basename(input_file))[0]
-        output_dir = os.path.join(config.test_scripts_path, base_name)
-    else:
-        output_dir = os.path.join(config.test_scripts_path, output_dir)
+        # Determine if this is a vision analysis (either by flag or filename)
+        is_vision_analysis = use_vision or "_vision_analysis.json" in analysis_file
 
-    os.makedirs(output_dir, exist_ok=True)
+        # Use vision capabilities if requested
+        if is_vision_analysis:
+            logger.info("Using vision-enhanced test generation")
+            # Inject vision-specific properties if needed
+            if "vision_analysis" not in analysis_data:
+                logger.info("Converting standard analysis to vision-enhanced format")
+                # This adapts a standard analysis for vision processing
+                analysis_data["vision_analysis"] = True
 
-    # Save test scripts
-    output_files = {}
+        # Generate tests with the updated analysis - Fix the parameter name here
+        generated_tests = test_gen.generate_tests(
+            discovered_pages_data={url: analysis_data},
+            output_dir=output_dir,
+            framework=framework,
+            language=language  # Changed from programming_language to language
+        )
 
-    # Save summary JSON
-    summary_path = os.path.join(output_dir, "test_scripts.json")
-    with open(summary_path, 'w', encoding='utf-8') as f:
-        json.dump(test_scripts, indent=2, fp=f)
-
-    output_files["summary"] = summary_path
-
-    # Save individual files (update to use language-specific file extensions)
-    if "feature_file" in test_scripts:
-        feature_path = os.path.join(output_dir, "test.feature")
-        with open(feature_path, 'w', encoding='utf-8') as f:
-            f.write(test_scripts["feature_file"])
-        output_files["feature"] = feature_path
-
-    if "step_definitions" in test_scripts:
-        # Use appropriate file extension based on language
-        if language.startswith('py'):  # Handle python, python3, etc.
-            file_ext = '.py'
-            filename = "steps_definition"
-        else:
-            file_ext = '.java'
-            filename = "StepDefinitions"
-
-        steps_path = os.path.join(output_dir, f"{filename}{file_ext}")
-        with open(steps_path, 'w', encoding='utf-8') as f:
-            f.write(test_scripts["step_definitions"])
-        output_files["steps"] = steps_path
-
-    if "page_object" in test_scripts:
-        # Use appropriate file extension based on language
-        if language.startswith('py'):  # Handle python, python3, etc.
-            file_ext = '.py'
-            filename = "page_object"
-        else:
-            file_ext = '.java'
-            filename = "PageObject"
-
-        page_path = os.path.join(output_dir, f"{filename}{file_ext}")
-        with open(page_path, 'w', encoding='utf-8') as f:
-            f.write(test_scripts["page_object"])
-        output_files["page_object"] = page_path
-
-    logger.info(f"Generated test scripts in {output_dir}")
-    return output_files
+        logger.info(f"Generated {len(generated_tests)} test files")
+        return True
+    except Exception as e:
+        logger.error(f"Error generating test scripts: {str(e)}", exc_info=True)
+        return False
 
 def process_end_to_end(
     config: Config,
@@ -290,7 +254,7 @@ def analyze_page_with_vision(config: Config, url: str, output_filename: Optional
     crawler = WebCrawler(config)
     try:
         # If flow file is provided, use crawl with user flow
-        if flow_file:
+        if (flow_file):
             if not os.path.exists(flow_file):
                 logger.error(f"User flow file not found: {flow_file}")
                 raise FileNotFoundError(f"User flow file not found: {flow_file}")
@@ -545,7 +509,16 @@ def main():
 
         elif args.command == 'generate':
             language = getattr(args, 'language', 'java')
-            generate_test_scripts(config, args.input, args.framework, args.output, language)  # Pass language here
+            success = generate_test_scripts(
+                config,
+                args.input,
+                framework=args.framework,
+                language=args.language,
+                output_dir=args.output,
+                use_vision=args.use_vision  # Pass the use_vision flag here
+            )
+            if not success:
+                sys.exit(1)
             logger.info(f"Generated {args.framework} test scripts in {language}")
 
         elif args.command == 'e2e':

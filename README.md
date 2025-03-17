@@ -25,6 +25,7 @@ An automated framework that uses LLMs to generate smoke tests for web applicatio
       - [End-to-End Process](#end-to-end-process)
       - [Vision-Enhanced Analysis](#vision-enhanced-analysis)
       - [Vision-Based End-to-End Testing](#vision-based-end-to-end-testing)
+      - [Generating Tests from Vision Analysis](#generating-tests-from-vision-analysis)
       - [User Flow Testing](#user-flow-testing)
     - [Working with Test Generator](#working-with-test-generator)
   - [📤 Output](#-output)
@@ -218,12 +219,48 @@ python run.py vision https://example.com
 python run.py vision-e2e https://example.com
 ```
 
-Vision-enhanced testing provides several benefits:
+#### Generating Tests from Vision Analysis
 
-- Better understanding of page layout and visual elements
-- Improved element locator strategies based on visual context
-- More comprehensive test scenarios that consider visual relationships
-- Enhanced ability to test complex UI components
+You can generate test scripts based on vision analysis results in the following ways:
+
+1. **Directly from vision analysis files**:
+
+```bash
+# Generate tests from a vision analysis file
+python run.py generate output/analysis/example_com_vision_analysis.json
+```
+
+2. **Using the `--use-vision` flag with standard analysis**:
+
+```bash
+# Generate tests with vision enhancement from page data
+python run.py generate output/analysis/example_com_analysis.json --use-vision
+```
+
+3. **After running vision-e2e process**:
+   Tests are automatically generated as part of the vision-e2e process and saved in:
+   ```
+   output/test_scripts/[domain]_vision_analysis/
+   ```
+
+Vision-enhanced test generation provides several benefits:
+
+- Test scenarios based on visual relationships and UI layouts
+- Element locators derived from visual analysis
+- Test cases for content visibility and visual state validation
+- Improved detection of interactive elements that might be missed in DOM-only analysis
+
+**Example output structure**:
+
+```
+output/test_scripts/example_com_vision_analysis/
+├── test.feature         # Cucumber feature file with scenarios
+├── PageObject.java      # Page object with visually identified elements
+├── StepDefinitions.java # Step definitions for visual interactions
+└── test_scripts.json    # Complete test script data
+```
+
+Vision-enhanced testing provides several benefits:
 
 #### User Flow Testing
 

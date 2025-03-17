@@ -1,32 +1,37 @@
-
-Feature: Test Login Functionality
+Feature: Smoke Testing for Practice Test Login Page
 
   Scenario: Verify Page Title
-    Given I open the login page
-    Then the page title should be "Test Login | Practice Test Automation"
+    Given user opens URL "https://practicetestautomation.com/practice-test-login/"
+    Then user verifies page title is "Test Login | Practice Test Automation"
 
-  Scenario: Verify Username Input Field
-    Given I open the login page
-    Then the username input field should be present and enabled
+  Scenario: Positive Login Test
+    Given user opens URL "https://practicetestautomation.com/practice-test-login/"
+    When user enters "testuser" into the username field
+    And user enters "Password123" into the password field
+    And user clicks on the Submit button
+    Then user expects to see a successful login message
 
-  Scenario: Submit Form with Empty Fields
-    Given I open the login page
-    When I click the "Submit" button
-    Then I should see an error message for empty username and password fields
+  Scenario: Negative Login Test (Invalid Credentials)
+    Given user opens URL "https://practicetestautomation.com/practice-test-login/"
+    When user enters "invaliduser" into the username field
+    And user enters "wrongpassword" into the password field
+    And user clicks on the Submit button
+    Then user expects to see an error message
 
-  Scenario: Submit Form with Invalid Credentials
-    Given I open the login page
-    When I enter a valid username and an incorrect password
-    And I click the "Submit" button
-    Then I should see an error message for incorrect credentials
+  Scenario: Empty Fields Test
+    Given user opens URL "https://practicetestautomation.com/practice-test-login/"
+    When user leaves username and password fields empty
+    And user clicks on the Submit button
+    Then user expects to see validation messages for required fields
 
-  Scenario: Submit Form with Valid Credentials
-    Given I open the login page
-    When I enter a valid username and a valid password
-    And I click the "Submit" button
-    Then I should see a success message
+  Scenario: Field Length Test
+    Given user opens URL "https://practicetestautomation.com/practice-test-login/"
+    When user enters "a very long username that exceeds the limit" into the username field
+    And user enters "a very long password that exceeds the limit" into the password field
+    And user clicks on the Submit button
+    Then user expects appropriate validation messages for input limits
 
-  Scenario: Test Navigation Menu
-    Given I open the login page
-    When I click the "Toggle Navigation" button
-    Then the navigation menu should expand or collapse
+  Scenario: Password Visibility Toggle Test
+    Given user opens URL "https://practicetestautomation.com/practice-test-login/"
+    When user clicks on the password visibility toggle
+    Then user expects the password to be visible

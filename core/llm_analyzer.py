@@ -1044,10 +1044,67 @@ class LLMAnalyzer:
         Returns:
             list: Formatted messages for the LLM
         """
+
+        # Add examples of well-formed feature files and step definitions
+        example_features = """
+        Feature: Smoke-QA
+
+            Scenario: verify home page
+                Given user launches browser in "Edge"
+                And user opens URL "QA_URL"
+                And user verifies "My Tasks" is "present" on screen
+                And user verifies "My Products" is "present" on screen
+
+            Scenario: verify new product page
+                Given user launches browser in "Edge"
+                # And user opens URL "http://server/domain.products/some_page.aspx"
+                And user opens URL "QA_URL"
+                When user mouse hover the link "Products"
+                And user click on the link "New Product"
+                And user verifies "New Product Steps is "present" on screen
+
+            Background: User Logged in
+            # Scenario: verify home page
+                Given I open the url "SOMEURL"
+                When I add "UserName" to the inputfield "UserName"
+                When I add "pwd" to the inputfield "word"
+                And I click on the Login element "Login"
+                And I pause for 2000 ms
+                Then I expect that the url is "SOMEURL"
+
+            Scenario: copy existing id
+                And I click on the element on the Screen "Edit"
+                And I click on the element on the Screen "Copy"
+                Then I expect that element is Present in frame
+                Then I expect that element "Search" is displayed on Screen
+                Then I expect that element "Close" is displayed on Screen
+                And I click on the element on Screen "Close"
+                Then I expect that element is returned from frame
+        """
+
+        example_steps = """
+            @Given("I am on the login page")
+            public void iAmOnTheLoginPage() {
+                loginPage.navigateTo();
+                Assert.assertTrue(loginPage.isPageLoaded());
+            }
+
+            @When("I enter {string} into the username field")
+            public void iEnterIntoTheUsernameField(String username) {
+                loginPage.enterUsername(username);
+            }
+            """
+
         # Prepare the prompt with extra emphasis on proper JSON formatting
         prompt = ChatPromptTemplate.from_template(
             """
             You are an expert in automated testing using Cucumber with {language}.
+
+            EXAMPLE FEATURE FILE:
+            {example_features}
+
+            EXAMPLE STEP DEFINITIONS:
+            {example_steps}
 
             Generate Cucumber test scripts for the following page based on the analysis:
 
@@ -1113,6 +1170,8 @@ class LLMAnalyzer:
         return prompt.format_messages(
             url=url,
             title=title,
+            example_features=example_features,
+            example_steps=example_steps,
             page_analysis_summary=page_analysis_summary,
             unique_identifiers=unique_identifiers_str,
             key_elements=key_elements_str,

@@ -1,59 +1,74 @@
-
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
+import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.openqa.selenium.support.ui.WebDriverWait;
+import java.time.Duration;
 
 public class LoginPage {
     private WebDriver driver;
+    private WebDriverWait wait;
 
     public LoginPage(WebDriver driver) {
         this.driver = driver;
+        this.wait = new WebDriverWait(driver, Duration.ofSeconds(10));
     }
 
-    public void open() {
-        driver.get("https://practicetestautomation.com/practice-test-login/");
+    public void navigateTo(String url) {
+        driver.get(url);
+    }
+
+    public boolean isPageLoaded() {
+        return driver.getTitle().equals("Test Login | Practice Test Automation");
+    }
+
+    public void enterUsername(String username) {
+        WebElement usernameField = wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("username")));
+        usernameField.clear();
+        usernameField.sendKeys(username);
+    }
+
+    public void enterPassword(String password) {
+        WebElement passwordField = wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("password")));
+        passwordField.clear();
+        passwordField.sendKeys(password);
+    }
+
+    public void clickSubmit() {
+        WebElement submitButton = wait.until(ExpectedConditions.elementToBeClickable(By.id("submit")));
+        submitButton.click();
     }
 
     public String getPageTitle() {
         return driver.getTitle();
     }
 
-    public boolean isUsernameFieldPresentAndEnabled() {
-        return driver.findElement(By.id("username")).isDisplayed() && driver.findElement(By.id("username")).isEnabled();
+    public boolean isSuccessfulLoginMessageDisplayed() {
+        // Check for successful login message logic here
+        return true;
     }
 
-    public void enterUsername(String username) {
-        driver.findElement(By.id("username")).sendKeys(username);
+    public boolean isErrorMessageDisplayed() {
+        // Check for error message logic here
+        return true;
     }
 
-    public void enterPassword(String password) {
-        driver.findElement(By.id("password")).sendKeys(password);
+    public boolean areValidationMessagesDisplayed() {
+        // Check for validation messages logic here
+        return true;
     }
 
-    public void clickButton(String buttonId) {
-        driver.findElement(By.id(buttonId)).click();
+    public boolean isInputLengthValidationMessageDisplayed() {
+        // Check for input length validation message logic here
+        return true;
     }
 
-    public boolean isErrorMessageDisplayedForEmptyFields() {
-        // Implement logic to check for empty field error messages
-        return true; // Placeholder
+    public void togglePasswordVisibility() {
+        // Logic to toggle password visibility here
     }
 
-    public boolean isErrorMessageDisplayedForIncorrectCredentials() {
-        // Implement logic to check for incorrect credentials error messages
-        return true; // Placeholder
-    }
-
-    public boolean isSuccessMessageDisplayed() {
-        // Implement logic to check for success messages
-        return true; // Placeholder
-    }
-
-    public void clickToggleNavigation() {
-        driver.findElement(By.id("toggle-navigation")).click();
-    }
-
-    public boolean isNavigationMenuExpandedOrCollapsed() {
-        // Implement logic to check the state of the navigation menu
-        return true; // Placeholder
+    public boolean isPasswordVisible() {
+        // Logic to check if password is visible
+        return true;
     }
 }

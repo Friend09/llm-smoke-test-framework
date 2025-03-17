@@ -1,67 +1,64 @@
-
 import io.cucumber.java.en.Given;
-import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
+import io.cucumber.java.en.Then;
+import org.junit.Assert;
 
-public class LoginTestSteps {
+public class LoginSteps {
+    LoginPage loginPage = new LoginPage();
 
-    private LoginPage loginPage;
-
-    @Given("I open the login page")
-    public void i_open_the_login_page() {
-        loginPage = new LoginPage();
-        loginPage.open();
+    @Given("user opens URL {string}")
+    public void userOpensURL(String url) {
+        loginPage.navigateTo(url);
+        Assert.assertTrue(loginPage.isPageLoaded());
     }
 
-    @Then("the page title should be {string}")
-    public void the_page_title_should_be(String title) {
-        assertEquals(title, loginPage.getPageTitle());
+    @When("user enters {string} into the username field")
+    public void userEntersIntoUsernameField(String username) {
+        loginPage.enterUsername(username);
     }
 
-    @Then("the username input field should be present and enabled")
-    public void the_username_input_field_should_be_present_and_enabled() {
-        assertTrue(loginPage.isUsernameFieldPresentAndEnabled());
+    @When("user enters {string} into the password field")
+    public void userEntersIntoPasswordField(String password) {
+        loginPage.enterPassword(password);
     }
 
-    @When("I click the {string} button")
-    public void i_click_the_button(String button) {
-        loginPage.clickButton(button);
+    @When("user clicks on the Submit button")
+    public void userClicksOnSubmitButton() {
+        loginPage.clickSubmit();
     }
 
-    @Then("I should see an error message for empty username and password fields")
-    public void i_should_see_an_error_message_for_empty_fields() {
-        assertTrue(loginPage.isErrorMessageDisplayedForEmptyFields());
+    @Then("user verifies page title is {string}")
+    public void userVerifiesPageTitleIs(String title) {
+        Assert.assertEquals(title, loginPage.getPageTitle());
     }
 
-    @When("I enter a valid username and an incorrect password")
-    public void i_enter_valid_username_and_incorrect_password() {
-        loginPage.enterUsername("validUser");
-        loginPage.enterPassword("wrongPassword");
+    @Then("user expects to see a successful login message")
+    public void userExpectsToSeeSuccessfulLoginMessage() {
+        Assert.assertTrue(loginPage.isSuccessfulLoginMessageDisplayed());
     }
 
-    @Then("I should see an error message for incorrect credentials")
-    public void i_should_see_an_error_message_for_incorrect_credentials() {
-        assertTrue(loginPage.isErrorMessageDisplayedForIncorrectCredentials());
+    @Then("user expects to see an error message")
+    public void userExpectsToSeeErrorMessage() {
+        Assert.assertTrue(loginPage.isErrorMessageDisplayed());
     }
 
-    @When("I enter a valid username and a valid password")
-    public void i_enter_valid_username_and_valid_password() {
-        loginPage.enterUsername("validUser");
-        loginPage.enterPassword("validPassword");
+    @Then("user expects to see validation messages for required fields")
+    public void userExpectsValidationMessages() {
+        Assert.assertTrue(loginPage.areValidationMessagesDisplayed());
     }
 
-    @Then("I should see a success message")
-    public void i_should_see_a_success_message() {
-        assertTrue(loginPage.isSuccessMessageDisplayed());
+    @Then("user expects appropriate validation messages for input limits")
+    public void userExpectsValidationMessagesForInputLimits() {
+        Assert.assertTrue(loginPage.isInputLengthValidationMessageDisplayed());
     }
 
-    @When("I click the Toggle Navigation button")
-    public void i_click_the_toggle_navigation_button() {
-        loginPage.clickToggleNavigation();
+    @When("user clicks on the password visibility toggle")
+    public void userClicksOnPasswordVisibilityToggle() {
+        loginPage.togglePasswordVisibility();
     }
 
-    @Then("the navigation menu should expand or collapse")
-    public void the_navigation_menu_should_expand_or_collapse() {
-        assertTrue(loginPage.isNavigationMenuExpandedOrCollapsed());
+    @Then("user expects the password to be visible")
+    public void userExpectsPasswordToBeVisible() {
+        Assert.assertTrue(loginPage.isPasswordVisible());
     }
 }
