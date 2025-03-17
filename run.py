@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import sys
+import urllib
 import time  # Add missing import
 from typing import List, Dict, Any, Optional
 from datetime import datetime
@@ -12,6 +13,7 @@ from config.config import Config
 from core.crawler import WebCrawler
 from core.llm_analyzer import LLMAnalyzer
 from core.test_generator import TestGenerator
+from core.sitemap_crawler import SitemapCrawler
 
 # Configure logging
 logging.basicConfig(
@@ -44,6 +46,9 @@ def parse_arguments():
     vision_e2e_parser.add_argument('-o', '--output', help='Output directory prefix')
     vision_e2e_parser.add_argument('-w', '--with-flow', dest='with_flow', help='User flow description file')
     vision_e2e_parser.add_argument('-l', '--language', default='java', help='Programming language (default: java)')
+    # Add site-wide support to vision-e2e
+    vision_e2e_parser.add_argument('--site', action='store_true', help="Process the entire site rather than just one page")
+    vision_e2e_parser.add_argument('--max-pages', type=int, default=50, help="Maximum number of pages to crawl for site-wide processing")
 
     # Crawl command
     crawl_parser = subparsers.add_parser('crawl', help='Crawl a webpage and extract data')
@@ -78,6 +83,9 @@ def parse_arguments():
     e2e_parser.add_argument('-o', '--output', help='Output directory prefix')
     e2e_parser.add_argument('--use-vision', action='store_true', help='Use vision capabilities')
     e2e_parser.add_argument('--with-screenshots', action='store_true', help='Capture screenshots')
+    # Add site-wide support to e2e
+    e2e_parser.add_argument('--site', action='store_true', help="Process the entire site rather than just one page")
+    e2e_parser.add_argument('--max-pages', type=int, default=50, help="Maximum number of pages to crawl for site-wide processing")
 
     return parser.parse_args()
 
@@ -453,6 +461,140 @@ def vision_e2e_process(
         logger.error(f"Error in vision-based end-to-end process: {str(e)}", exc_info=True)
         return {"error": str(e)}
 
+def crawl_site(config: Config, base_url: str, max_pages: int = 50, output_dir: Optional[str] = None) -> Dict[str, Dict]:
+    """Crawl an entire website and generate a sitemap."""
+    output_dir = output_dir or config.OUTPUT_DIR
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Create a sitemap crawler
+    sitemap_crawler = SitemapCrawler(config)
+
+    # Crawl the site
+    sitemap = sitemap_crawler.crawl_site(base_url, max_pages, output_dir)
+
+    return sitemap
+
+def generate_site_tests(
+    config: Config,
+    sitemap: Dict[str, Dict],
+    framework: str = 'cucumber',
+    language: str = 'java',
+    output_dir: Optional[str] = None,
+    use_vision: bool = False,
+    batch_size: int = 5  # Process pages in batches to avoid overwhelming resources
+) -> Dict[str, Dict]:
+    """Generate tests for an entire website based on a sitemap."""
+    output_dir = output_dir or os.path.join(config.OUTPUT_DIR, "site_tests")
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Initialize the LLM analyzer and test generator
+    # Don't pass llm_analyzer to TestGenerator - it will create its own instance
+    test_generator = TestGenerator(config)
+
+    generated_tests = {}
+    page_data_map = {}
+
+    # Process pages in batches
+    urls = list(sitemap.keys())
+    for i in range(0, len(urls), batch_size):
+        batch_urls = urls[i:i+batch_size]
+        logger.info(f"Processing batch {i//batch_size + 1}/{(len(urls)+batch_size-1)//batch_size}, pages {i+1}-{min(i+batch_size, len(urls))}")
+
+        # Load page data for batch
+        for url in batch_urls:
+            try:
+                file_path = sitemap[url]["file_path"]
+                with open(file_path, 'r') as f:
+                    page_data = json.load(f)
+                page_data_map[url] = page_data
+            except Exception as e:
+                logger.error(f"Error loading page data for {url}: {str(e)}")
+
+        # Generate tests for batch
+        batch_test_dir = os.path.join(output_dir, f"batch_{i//batch_size + 1}")
+        batch_tests = test_generator.generate_tests(
+            discovered_pages_data=page_data_map,
+            output_dir=batch_test_dir,
+            framework=framework,
+            language=language,
+            use_vision=use_vision
+        )
+
+        generated_tests.update(batch_tests)
+
+        # Clear batch data to free memory
+        page_data_map.clear()
+
+    # Generate a main test suite that includes all batches
+    main_suite_path = os.path.join(output_dir, "MainTestSuite.java")
+    with open(main_suite_path, 'w') as f:
+        f.write(f"""import org.junit.runner.RunWith;
+import org.junit.runners.Suite;
+
+@RunWith(Suite.class)
+@Suite.SuiteClasses({{
+    {", ".join([f"Batch{i+1}TestSuite.class" for i in range((len(urls)+batch_size-1)//batch_size)])}
+}})
+public class MainTestSuite {{
+    // This class will run all batch test suites
+}}
+""")
+
+    # Create a summary report
+    summary_path = os.path.join(output_dir, "test_summary.md")
+    with open(summary_path, 'w') as f:
+        f.write(f"# Site-Wide Test Summary\n\n")
+        f.write(f"Base URL: {list(sitemap.keys())[0]}\n\n")
+        f.write(f"Total Pages Tested: {len(sitemap)}\n\n")
+        f.write(f"## Pages and Tests\n\n")
+
+        for url, data in sitemap.items():
+            f.write(f"### {data.get('title', url)}\n")
+            f.write(f"- URL: {url}\n")
+            if url in generated_tests:
+                test_count = len(generated_tests[url].get("scenarios", []))
+                f.write(f"- Tests: {test_count}\n")
+            f.write("\n")
+
+    return generated_tests
+
+def site_e2e_process(
+    config: Config,
+    base_url: str,
+    max_pages: int = 50,
+    framework: str = 'cucumber',
+    language: str = 'java',
+    output_prefix: Optional[str] = None,
+    use_vision: bool = False
+) -> Dict[str, Dict]:
+    """Run the end-to-end process for an entire site."""
+    # Set up the output directory
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    site_domain = urllib.parse.urlparse(base_url).netloc
+    output_dir_name = output_prefix or f"site_e2e_{site_domain}_{timestamp}"
+    output_dir = os.path.join(config.OUTPUT_DIR, output_dir_name)
+
+    logger.info(f"Starting site-wide E2E process for {base_url}")
+    logger.info(f"Output will be saved to {output_dir}")
+
+    # Step 1: Crawl the site
+    sitemap = crawl_site(config, base_url, max_pages, output_dir)
+
+    # Step 2: Generate tests for the entire site
+    tests = generate_site_tests(
+        config,
+        sitemap,
+        framework,
+        language,
+        os.path.join(output_dir, "test_scripts"),
+        use_vision
+    )
+
+    logger.info(f"Site-wide E2E process complete. Generated tests for {len(tests)} pages.")
+    logger.info(f"Results saved to {output_dir}")
+
+    return tests
+
 def main():
     """Main entry point."""
     try:
@@ -520,6 +662,28 @@ def main():
             if not success:
                 sys.exit(1)
             logger.info(f"Generated {args.framework} test scripts in {language}")
+
+        elif args.command == 'e2e' and args.site:
+            site_e2e_process(
+                config,
+                args.url,
+                args.max_pages,
+                args.framework,
+                args.language,
+                args.output,
+                False
+            )
+
+        elif args.command == 'vision-e2e' and args.site:
+            site_e2e_process(
+                config,
+                args.url,
+                args.max_pages,
+                args.framework,
+                args.language,
+                args.output,
+                True
+            )
 
         elif args.command == 'e2e':
             # Pass screenshots option from e2e to crawl

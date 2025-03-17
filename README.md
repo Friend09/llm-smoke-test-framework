@@ -27,6 +27,7 @@ An automated framework that uses LLMs to generate smoke tests for web applicatio
       - [Vision-Based End-to-End Testing](#vision-based-end-to-end-testing)
       - [Generating Tests from Vision Analysis](#generating-tests-from-vision-analysis)
       - [User Flow Testing](#user-flow-testing)
+      - [Site-Wide Testing](#site-wide-testing)
     - [Working with Test Generator](#working-with-test-generator)
   - [📤 Output](#-output)
   - [🤝 Contributing](#-contributing)
@@ -140,6 +141,8 @@ llm-smoke-test-framework/
 | `vision-e2e`             | Runs the end-to-end process with vision capabilities.                         |
 | `vision --with-flow`     | Runs with a predefined user flow.                                             |
 | `vision-e2e --with-flow` | Runs end-to-end process with user flow.                                       |
+| `e2e --site`             | Runs end-to-end process for an entire website.                                |
+| `vision-e2e --site`      | Runs vision-enhanced end-to-end process for an entire website.                |
 
 ### Basic Commands
 
@@ -315,6 +318,36 @@ python run.py vision-e2e https://example.com --with-flow flows/login_flow.txt
 ```
 
 **Note:** The user flow file must exist at the specified path when running the command.
+
+#### Site-Wide Testing
+
+The framework now supports generating test scripts for an entire website, not just individual pages:
+
+```bash
+# Run end-to-end process for a whole site (up to 50 pages by default)
+python run.py e2e https://example.com --site
+
+# Run with vision capabilities for an entire site
+python run.py vision-e2e https://example.com --site
+
+# Limit the number of pages to crawl
+python run.py e2e https://example.com --site --max-pages 20
+
+# Set custom output directory
+python run.py e2e https://example.com --site --output my_site_tests
+```
+
+When using site-wide testing, the framework:
+
+1. **Discovers pages**: Uses a sitemap crawler to find all accessible pages within the domain
+2. **Optimizes crawling**: Attempts to use sitemap.xml if available, then falls back to discovery crawling
+3. **Groups pages by type**: Categorizes pages (login, registration, product, etc.)
+4. **Processes in batches**: Handles groups of pages to manage resource usage
+5. **Creates comprehensive tests**: Generates tests for each page
+6. **Builds a test suite**: Creates a suite structure that organizes tests by page type
+7. **Produces a summary report**: Creates documentation with pages tested and test coverage stats
+
+The output structure for site-wide tests:
 
 ### Working with Test Generator
 

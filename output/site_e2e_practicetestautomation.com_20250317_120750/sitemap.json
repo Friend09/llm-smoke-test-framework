@@ -1,0 +1,202 @@
+{
+  "https://practicetestautomation.com/": {
+    "title": "Practice Test Automation | Learn Selenium WebDriver",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_.json"
+  },
+  "https://practicetestautomation.com/practice/": {
+    "title": "Practice | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_practice_.json"
+  },
+  "https://practicetestautomation.com/courses/": {
+    "title": "Courses | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_courses_.json"
+  },
+  "https://practicetestautomation.com/blog/": {
+    "title": "Blog | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_blog_.json"
+  },
+  "https://practicetestautomation.com/contact/": {
+    "title": "Contact | Practice Test Automation | Selenium WebDriver",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_contact_.json"
+  },
+  "https://practicetestautomation.com/privacy-policy/": {
+    "title": "Privacy Policy | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_privacy-policy_.json"
+  },
+  "https://practicetestautomation.com/practice-test-login/": {
+    "title": "Test Login | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_practice-test-login_.json"
+  },
+  "https://practicetestautomation.com/practice-test-exceptions/": {
+    "title": "Test Exceptions | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_practice-test-exceptions_.json"
+  },
+  "https://practicetestautomation.com/beginners-course-coupon": {
+    "title": "Just a moment...",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_beginners-course-coupon.json"
+  },
+  "https://practicetestautomation.com/selenium-python-udemy": {
+    "title": "Just a moment...",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-python-udemy.json"
+  },
+  "https://practicetestautomation.com/java-for-testers-udemy": {
+    "title": "Just a moment...",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_java-for-testers-udemy.json"
+  },
+  "https://practicetestautomation.com/python-for-testers": {
+    "title": "Just a moment...",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_python-for-testers.json"
+  },
+  "https://practicetestautomation.com/advanced-course-coupon": {
+    "title": "Just a moment...",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_advanced-course-coupon.json"
+  },
+  "https://practicetestautomation.com/xpath-course-coupon": {
+    "title": "Just a moment...",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_xpath-course-coupon.json"
+  },
+  "https://practicetestautomation.com/rest-assured-course-coupon": {
+    "title": "Just a moment...",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_rest-assured-course-coupon.json"
+  },
+  "https://practicetestautomation.com/selenium-grid": {
+    "title": "Just a moment...",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-grid.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-test-framework-from-scratch-referralCode": {
+    "title": "Just a moment...",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-test-framework-from-scratch-referralCode.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-6-engaging-with-the-selenium-community/": {
+    "title": "Unlock Your Future: Selenium WebDriver Career Launcher Part 6 | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-6-engaging-with-the-selenium-community_.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-1-elevating-your-career/": {
+    "title": "Unlock Your Future: Selenium WebDriver Career Launcher Part 1 | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-1-elevating-your-career_.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-5-selenium-webdriver-job-interviews/": {
+    "title": "Unlock Your Future: Selenium WebDriver Career Launcher Part 5 | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-5-selenium-webdriver-job-interviews_.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-4-navigating-selenium-job-listings/": {
+    "title": "Unlock Your Future: Selenium WebDriver Career Launcher Part 4 | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-4-navigating-selenium-job-listings_.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-1-elevating-your-career": {
+    "title": "Unlock Your Future: Selenium WebDriver Career Launcher Part 1 | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-1-elevating-your-career.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-3-crafting-a-winning-resume/": {
+    "title": "Unlock Your Future: Selenium WebDriver Career Launcher Part 3 | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-3-crafting-a-winning-resume_.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-2-mastering-portfolio-development/": {
+    "title": "Unlock Your Future: Selenium WebDriver Career Launcher Part 2 | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-2-mastering-portfolio-development_.json"
+  },
+  "https://practicetestautomation.com/headless-browser-testing-selenium-guide/": {
+    "title": "Headless Browser Testing with Selenium: Elevate Your Expertise | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_headless-browser-testing-selenium-guide_.json"
+  },
+  "https://practicetestautomation.com/test-automation-pyramid/": {
+    "title": "Unlock the Potential: Mastering the Test Automation Pyramid | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_test-automation-pyramid_.json"
+  },
+  "https://practicetestautomation.com/unusual-uses-selenium-webdriver/": {
+    "title": "Unusual Uses for Selenium WebDriver | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_unusual-uses-selenium-webdriver_.json"
+  },
+  "https://practicetestautomation.com/starting-with-selenium-webdriver/": {
+    "title": "Starting with Selenium WebDriver and Java: An Overview for Beginners | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_starting-with-selenium-webdriver_.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-5-selenium-webdriver-job-interviews": {
+    "title": "Unlock Your Future: Selenium WebDriver Career Launcher Part 5 | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-5-selenium-webdriver-job-interviews.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-6-engaging-with-the-selenium-community/?share=facebook&nb=1": {
+    "title": "Facebook",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-6-engaging-with-the-selenium-community__share=facebook&nb=1.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-6-engaging-with-the-selenium-community/?share=linkedin&nb=1": {
+    "title": "LinkedIn Login, Sign in | LinkedIn",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-6-engaging-with-the-selenium-community__share=linkedin&nb=1.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-6-engaging-with-the-selenium-community/?share=reddit&nb=1": {
+    "title": "",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-6-engaging-with-the-selenium-community__share=reddit&nb=1.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-6-engaging-with-the-selenium-community/?share=telegram&nb=1": {
+    "title": "Telegram: Share Web Page",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-6-engaging-with-the-selenium-community__share=telegram&nb=1.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-6-engaging-with-the-selenium-community/?share=threads&nb=1": {
+    "title": "Threads \u2022 Log in",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-6-engaging-with-the-selenium-community__share=threads&nb=1.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-6-engaging-with-the-selenium-community/?share=x&nb=1": {
+    "title": "",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-6-engaging-with-the-selenium-community__share=x&nb=1.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-2-mastering-portfolio-development": {
+    "title": "Unlock Your Future: Selenium WebDriver Career Launcher Part 2 | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-2-mastering-portfolio-development.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-1-elevating-your-career/?share=facebook&nb=1": {
+    "title": "Facebook",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-1-elevating-your-career__share=facebook&nb=1.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-1-elevating-your-career/?share=linkedin&nb=1": {
+    "title": "LinkedIn Login, Sign in | LinkedIn",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-1-elevating-your-career__share=linkedin&nb=1.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-1-elevating-your-career/?share=reddit&nb=1": {
+    "title": "",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-1-elevating-your-career__share=reddit&nb=1.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-1-elevating-your-career/?share=telegram&nb=1": {
+    "title": "Telegram: Share Web Page",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-1-elevating-your-career__share=telegram&nb=1.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-1-elevating-your-career/?share=threads&nb=1": {
+    "title": "Threads \u2022 Log in",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-1-elevating-your-career__share=threads&nb=1.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-1-elevating-your-career/?share=x&nb=1": {
+    "title": "",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-1-elevating-your-career__share=x&nb=1.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-4-navigating-selenium-job-listings": {
+    "title": "Unlock Your Future: Selenium WebDriver Career Launcher Part 4 | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-4-navigating-selenium-job-listings.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-5-selenium-webdriver-job-interviews/?share=facebook&nb=1": {
+    "title": "Facebook",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-5-selenium-webdriver-job-interviews__share=facebook&nb=1.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-5-selenium-webdriver-job-interviews/?share=linkedin&nb=1": {
+    "title": "LinkedIn Login, Sign in | LinkedIn",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-5-selenium-webdriver-job-interviews__share=linkedin&nb=1.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-5-selenium-webdriver-job-interviews/?share=reddit&nb=1": {
+    "title": "",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-5-selenium-webdriver-job-interviews__share=reddit&nb=1.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-5-selenium-webdriver-job-interviews/?share=telegram&nb=1": {
+    "title": "Telegram: Share Web Page",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-5-selenium-webdriver-job-interviews__share=telegram&nb=1.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-5-selenium-webdriver-job-interviews/?share=threads&nb=1": {
+    "title": "Threads \u2022 Log in",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-5-selenium-webdriver-job-interviews__share=threads&nb=1.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-5-selenium-webdriver-job-interviews/?share=x&nb=1": {
+    "title": "",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-5-selenium-webdriver-job-interviews__share=x&nb=1.json"
+  },
+  "https://practicetestautomation.com/selenium-webdriver-career-launcher-part-3-crafting-a-winning-resume": {
+    "title": "Unlock Your Future: Selenium WebDriver Career Launcher Part 3 | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250317_120750/page_data/practicetestautomation.com_selenium-webdriver-career-launcher-part-3-crafting-a-winning-resume.json"
+  }
+}

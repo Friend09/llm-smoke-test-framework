@@ -217,17 +217,35 @@ class TestGenerator:
                 with open(page_file, "w", encoding="utf-8") as f:
                     f.write(test_script["page_object"])
 
+            # Add page type tag to feature files for better organization
+            if framework == "cucumber" and "feature_file" in test_script:
+                feature_content = test_script["feature_file"]
+                # Call with the correct arguments now
+                page_type_tag = self._determine_page_type(test_script.get("page_title", ""), url)
+
+                # Add tag to the feature if it doesn't already have one
+                if not feature_content.strip().startswith("@"):
+                    tag_line = f"@{page_type_tag.lower().replace(' ', '-')}\n"
+                    feature_content = tag_line + feature_content
+                    test_script["feature_file"] = feature_content
+
+                    # Update the feature file with the tag
+                    with open(feature_file, "w", encoding="utf-8") as f:
+                        f.write(feature_content)
+
             logger.info(f"Generated test files for {url} in {page_type_dir}")
 
         except Exception as e:
             logger.error(f"Error saving test files for {url}: {str(e)}")
 
-    def _determine_page_type(self, test_script):
+    def _determine_page_type(self, test_script_or_title, url=None):
         """
         Determine the page type based on the test script content and analysis.
+        Can be called with either a test_script object or with title and url.
 
         Args:
-            test_script (dict): Generated test script
+            test_script_or_title (dict or str): Either the test script object or page title
+            url (str, optional): URL of the page, only used if first param is a string
 
         Returns:
             str: Page type (login, form, landing, content, etc.)
@@ -235,33 +253,64 @@ class TestGenerator:
         # Default page type
         page_type = "general"
 
-        # Extract feature file content
-        feature_content = test_script.get("feature_file", "").lower()
-        steps_content = test_script.get("step_definitions", "").lower()
+        # Check if first argument is a test script object or a title string
+        if isinstance(test_script_or_title, dict):
+            # It's a test script object
+            test_script = test_script_or_title
 
-        # Check for common page types
-        if "login" in feature_content and ("username" in feature_content or "password" in feature_content):
-            page_type = "login"
-        elif "register" in feature_content or "sign up" in feature_content or "registration" in feature_content:
-            page_type = "registration"
-        elif "checkout" in feature_content or "payment" in feature_content or "purchase" in feature_content:
-            page_type = "checkout"
-        elif "search" in feature_content and "results" in feature_content:
-            page_type = "search"
-        elif "form" in feature_content and "submit" in feature_content:
-            page_type = "form"
-        elif "cart" in feature_content or "shopping cart" in feature_content:
-            page_type = "cart"
-        elif "dashboard" in feature_content or "overview" in feature_content:
-            page_type = "dashboard"
-        elif "profile" in feature_content or "account" in feature_content:
-            page_type = "profile"
-        elif "listing" in feature_content or "list" in feature_content:
-            page_type = "listing"
-        elif "detail" in feature_content or "product" in feature_content:
-            page_type = "detail"
-        elif "landing" in feature_content or "home" in feature_content:
-            page_type = "landing"
+            # Extract feature file content
+            feature_content = test_script.get("feature_file", "").lower()
+            steps_content = test_script.get("step_definitions", "").lower()
+
+            # Check for common page types
+            if "login" in feature_content and ("username" in feature_content or "password" in feature_content):
+                page_type = "login"
+            elif "register" in feature_content or "sign up" in feature_content or "registration" in feature_content:
+                page_type = "registration"
+            elif "checkout" in feature_content or "payment" in feature_content or "purchase" in feature_content:
+                page_type = "checkout"
+            elif "search" in feature_content and "results" in feature_content:
+                page_type = "search"
+            elif "form" in feature_content and "submit" in feature_content:
+                page_type = "form"
+            elif "cart" in feature_content or "shopping cart" in feature_content:
+                page_type = "cart"
+            elif "dashboard" in feature_content or "overview" in feature_content:
+                page_type = "dashboard"
+            elif "profile" in feature_content or "account" in feature_content:
+                page_type = "profile"
+            elif "listing" in feature_content or "list" in feature_content:
+                page_type = "listing"
+            elif "detail" in feature_content or "product" in feature_content:
+                page_type = "detail"
+            elif "landing" in feature_content or "home" in feature_content:
+                page_type = "landing"
+        else:
+            # It's a title string with URL
+            title = str(test_script_or_title).lower()
+            url = str(url).lower() if url else ""
+
+            # Determine type based on title and URL keywords
+            if any(term in title or term in url for term in ["login", "sign in", "signin", "log in"]):
+                return "login"
+            elif any(term in title or term in url for term in ["register", "signup", "sign up", "create account"]):
+                return "registration"
+            elif any(term in title or term in url for term in ["contact", "feedback", "support"]):
+                return "form"
+            elif any(term in title or term in url for term in ["dashboard", "overview", "home"]):
+                return "dashboard"
+            elif any(term in title or term in url for term in ["profile", "account", "settings"]):
+                return "profile"
+            elif any(term in title or term in url for term in ["product", "item", "detail"]):
+                return "detail"
+            elif any(term in title or term in url for term in ["cart", "basket", "checkout", "payment"]):
+                return "checkout"
+            elif any(term in title or term in url for term in ["search", "find", "results"]):
+                return "search"
+            elif any(term in title or term in url for term in ["list", "catalog", "gallery"]):
+                return "listing"
+            elif "home" in title or url.endswith('/') or url.endswith('index'):
+                return "landing"
 
         return page_type
 
@@ -369,6 +418,102 @@ public class TestSuite {
         # Add other specialized page type handlers here if needed
 
         return generated_tests
+
+    def generate_page_object_map(self, output_dir):
+        """Generate a map of all page objects for easier navigation between tests."""
+        all_page_objects = []
+
+        # Find all Java files that look like page objects
+        for root, _, files in os.walk(output_dir):
+            for file in files:
+                if file.endswith("Page.java"):
+                    # Extract page class name
+                    page_class = os.path.splitext(file)[0]
+
+                    # Get relative path
+                    rel_path = os.path.relpath(os.path.join(root, file), output_dir)
+
+                    all_page_objects.append({
+                        "className": page_class,
+                        "filePath": rel_path
+                    })
+
+        # Create a PageObjectFactory if we have page objects
+        if all_page_objects:
+            factory_path = os.path.join(output_dir, "PageObjectFactory.java")
+
+            with open(factory_path, "w") as f:
+                f.write("""import org.openqa.selenium.WebDriver;
+
+/**
+ * Factory for creating page objects to simplify test maintenance.
+ */
+public class PageObjectFactory {
+    private WebDriver driver;
+
+    public PageObjectFactory(WebDriver driver) {
+        this.driver = driver;
+    }
+
+""")
+
+                # Add methods for each page
+                for page in all_page_objects:
+                    class_name = page["className"]
+                    method_name = class_name[0].lower() + class_name[1:]
+
+                    f.write(f"""    /**
+     * Get an instance of {class_name}
+     */
+    public {class_name} get{class_name}() {{
+        return new {class_name}(driver);
+    }}
+
+""")
+
+                f.write("}\n")
+
+            logger.info(f"Generated PageObjectFactory: {factory_path}")
+
+            # Create a BaseTest class for setup
+            base_test_path = os.path.join(output_dir, "BaseTest.java")
+
+            with open(base_test_path, "w") as f:
+                f.write("""import io.cucumber.java.After;
+import io.cucumber.java.Before;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.chrome.ChromeOptions;
+
+/**
+ * Base test class for setting up and tearing down WebDriver.
+ */
+public class BaseTest {
+    protected static WebDriver driver;
+    protected static PageObjectFactory pages;
+
+    @Before
+    public void setUp() {
+        ChromeOptions options = new ChromeOptions();
+        options.addArguments("--headless");
+
+        driver = new ChromeDriver(options);
+        driver.manage().window().maximize();
+
+        // Initialize the page factory
+        pages = new PageObjectFactory(driver);
+    }
+
+    @After
+    public void tearDown() {
+        if (driver != null) {
+            driver.quit();
+        }
+    }
+}
+""")
+
+            logger.info(f"Generated BaseTest: {base_test_path}")
 
     def _safe_filename(self, url):
         """
