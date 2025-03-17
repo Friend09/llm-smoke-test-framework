@@ -11,6 +11,7 @@ from langchain.output_parsers import StructuredOutputParser, ResponseSchema
 from config.config import Config
 from openai import OpenAI
 import re
+from .screenshot_utils import optimize_screenshot
 
 logger = logging.getLogger(__name__)
 
@@ -475,13 +476,23 @@ class LLMAnalyzer:
                 logger.error(f"Screenshot file not found: {screenshot_path}")
                 return {}
 
-            # Prepare the image for analysis
-            with open(screenshot_path, "rb") as image_file:
-                import base64
-                # We'll keep this for compatibility with other parts of the code
-                screenshot_base64 = base64.b64encode(image_file.read()).decode()
+            # Optimize the screenshot before sending to API
+            from .screenshot_utils import optimize_screenshot  # Use the new utility function
+            screenshot_base64, image_format = optimize_screenshot(
+                screenshot_path,
+                max_dimension=self.config.SCREENSHOT_MAX_DIMENSION,  # Cap max dimension at 1280px
+                quality=self.config.SCREENSHOT_QUALITY  # Use 75% JPEG quality
+            )
 
-            logger.info(f"Analyzing screenshot with vision capabilities: {screenshot_path}")
+            if not screenshot_base64:
+                logger.warning("Failed to optimize screenshot. Vision analysis may be limited.")
+                # Fallback to reading the original file
+                with open(screenshot_path, "rb") as image_file:
+                    import base64
+                    screenshot_base64 = base64.b64encode(image_file.read()).decode()
+                    image_format = "png"
+
+            logger.info(f"Analyzing optimized screenshot from: {screenshot_path}")
 
             # Create the prompt for visual analysis
             prompt = """
@@ -511,7 +522,7 @@ class LLMAnalyzer:
                             {
                                 "type": "image_url",
                                 "image_url": {
-                                    "url": f"data:image/png;base64,{screenshot_base64}",
+                                    "url": f"data:image/{image_format};base64,{screenshot_base64}",
                                 },
                             },
                         ],
@@ -536,7 +547,6 @@ class LLMAnalyzer:
         except Exception as e:
             logger.error(f"Error analyzing screenshot with vision: {str(e)}", exc_info=True)
             return {}
-
     def _extract_test_scenarios_from_response(self, response: str) -> list:
         """Extract test scenarios from the formatted response."""
         try:

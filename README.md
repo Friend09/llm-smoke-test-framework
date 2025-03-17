@@ -37,6 +37,7 @@ An automated framework that uses LLMs to generate smoke tests for web applicatio
 - **Automated Test Generation:** Leverages LLMs to create robust smoke tests
 - **Web Crawling:** Discovers and extracts key elements from web pages
 - **Vision Capabilities:** Uses GPT-4o-mini's vision capabilities for enhanced UI analysis
+- **Screenshot Optimization:** Automatically resizes and compresses screenshots for efficient API usage
 - **Error Handling and Robustness:** Improved error handling and fallback mechanisms for increased reliability
 - **Configurable:** Easily adaptable to different testing frameworks and environments
 - **Modular Design:** Supports individual step execution for customized workflows
@@ -84,6 +85,10 @@ OPENAI_API_KEY=<YOUR API KEY>
 LLM_MODEL=gpt-4o-mini
 LLM_TEMPERATURE=0.0
 LLM_MAX_TOKENS=2000
+
+# Screenshot settings
+SCREENSHOT_MAX_DIMENSION=1280
+SCREENSHOT_QUALITY=75
 ```
 
 ## 🗂️ Project Structure
