@@ -141,3 +141,6 @@ chromedriver.log
 
 # Test reports
 reports/
+
+# Submodule for reference only (not tracked)
+ref_sitemap_generator/

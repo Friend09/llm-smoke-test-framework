@@ -38,9 +38,11 @@ def parse_arguments():
     vision_parser.add_argument('-f', '--with-flow', dest='with_flow', help='User flow description file')
     vision_parser.add_argument('-s', '--with-screenshots', action='store_true', help='Force new screenshot capture')
 
-    # Vision End-to-End command
+    # Vision End-to-End command - Make URL optional when sitemap file is provided
     vision_e2e_parser = subparsers.add_parser('vision-e2e', help='End-to-end process using vision capabilities')
-    vision_e2e_parser.add_argument('url', help='URL to crawl')
+    vision_e2e_parser_group = vision_e2e_parser.add_mutually_exclusive_group(required=True)
+    vision_e2e_parser_group.add_argument('url', nargs='?', help='URL to crawl')
+    vision_e2e_parser_group.add_argument('--sitemap-file', help='Path to a pre-generated sitemap file')
     vision_e2e_parser.add_argument('-f', '--framework', default='cucumber',
                                   help='Test framework (default: cucumber)')
     vision_e2e_parser.add_argument('-o', '--output', help='Output directory prefix')
@@ -73,9 +75,11 @@ def parse_arguments():
     generate_parser.add_argument('-o', '--output', help='Output directory')
     generate_parser.add_argument('--use-vision', action='store_true', help='Use vision-based generation')
 
-    # End-to-end command
+    # End-to-end command - Make URL optional when sitemap file is provided
     e2e_parser = subparsers.add_parser('e2e', help='End-to-end process: crawl, analyze, generate')
-    e2e_parser.add_argument('url', help='URL to crawl')
+    e2e_parser_group = e2e_parser.add_mutually_exclusive_group(required=True)
+    e2e_parser_group.add_argument('url', nargs='?', help='URL to crawl')
+    e2e_parser_group.add_argument('--sitemap-file', help='Path to a pre-generated sitemap file')
     e2e_parser.add_argument('-f', '--framework', default='cucumber',
                            help='Test framework (default: cucumber)')
     e2e_parser.add_argument('-l', '--language', default='java',
@@ -86,6 +90,14 @@ def parse_arguments():
     # Add site-wide support to e2e
     e2e_parser.add_argument('--site', action='store_true', help="Process the entire site rather than just one page")
     e2e_parser.add_argument('--max-pages', type=int, default=50, help="Maximum number of pages to crawl for site-wide processing")
+
+    # Add sitemap-specific commands
+    sitemap_parser = subparsers.add_parser('sitemap', help='Work with pre-generated sitemaps')
+    sitemap_parser.add_argument('--file', required=True, help='Path to the sitemap file')
+    sitemap_parser.add_argument('--base-url', help='Base URL to filter sitemap entries')
+    sitemap_parser.add_argument('--include', nargs='+', help='URL patterns to include')
+    sitemap_parser.add_argument('--exclude', nargs='+', help='URL patterns to exclude')
+    sitemap_parser.add_argument('-o', '--output', help='Output directory')
 
     return parser.parse_args()
 
@@ -595,6 +607,105 @@ def site_e2e_process(
 
     return tests
 
+def process_sitemap_file(config, sitemap_file, base_url=None, include_patterns=None, exclude_patterns=None, output_dir=None):
+    """Process a pre-generated sitemap file and prepare it for testing."""
+    from core.sitemap_loader import SitemapLoader
+
+    loader = SitemapLoader(config)
+
+    # Load URLs from sitemap file
+    urls = loader.load_sitemap_from_file(sitemap_file)
+
+    # Filter URLs if needed
+    if base_url or include_patterns or exclude_patterns:
+        urls = loader.filter_urls(urls, base_url, include_patterns, exclude_patterns)
+
+    # Prepare sitemap for testing
+    prepared_sitemap = loader.prepare_sitemap_for_testing(urls, output_dir)
+
+    return prepared_sitemap
+
+def site_e2e_process_with_sitemap(config, sitemap_file, framework='cucumber', language='java',
+                                output_prefix=None, use_vision=False):
+    """Run the end-to-end process using a pre-generated sitemap."""
+    # Set up the output directory
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_dir_name = output_prefix or f"sitemap_e2e_{timestamp}"
+    output_dir = os.path.join(config.OUTPUT_DIR, output_dir_name)
+    os.makedirs(output_dir, exist_ok=True)
+
+    logger.info(f"Starting sitemap-based E2E process with {sitemap_file}")
+    logger.info(f"Output will be saved to {output_dir}")
+
+    # Process the sitemap file
+    from core.sitemap_loader import SitemapLoader
+    loader = SitemapLoader(config)
+    urls = loader.load_sitemap_from_file(sitemap_file)
+
+    # Create the sitemap structure
+    sitemap = {}
+    page_data_dir = os.path.join(output_dir, "page_data")
+    os.makedirs(page_data_dir, exist_ok=True)
+
+    # Initialize web crawler
+    crawler = WebCrawler(config)
+
+    try:
+        # Process URLs in batches to avoid memory issues
+        batch_size = 5
+        for i in range(0, len(urls), batch_size):
+            batch_urls = urls[i:i+batch_size]
+            logger.info(f"Crawling batch {i//batch_size + 1}/{(len(urls)+batch_size-1)//batch_size}, pages {i+1}-{min(i+batch_size, len(urls))}")
+
+            # Crawl each URL in the batch
+            for url in batch_urls:
+                try:
+                    # Extract page data
+                    logger.info(f"Crawling {url}")
+                    page_data = crawler.extract_page_data(url, with_screenshots=use_vision)
+
+                    # Save page data to file
+                    safe_filename = url.replace("https://", "").replace("http://", "").replace("/", "_")
+                    file_path = os.path.join(page_data_dir, f"{safe_filename}.json")
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        json.dump(page_data, f, indent=2)
+
+                    # Add to sitemap
+                    sitemap[url] = {
+                        "url": url,
+                        "title": page_data.get("title", "Unknown Page"),
+                        "file_path": file_path
+                    }
+
+                except Exception as e:
+                    logger.error(f"Error crawling {url}: {str(e)}")
+    finally:
+        # Clean up crawler
+        if crawler:
+            crawler.close()
+
+    # Save the sitemap
+    sitemap_path = os.path.join(output_dir, "sitemap.json")
+    with open(sitemap_path, 'w', encoding='utf-8') as f:
+        json.dump(sitemap, f, indent=2)
+
+    logger.info(f"Crawled and processed {len(sitemap)} URLs from sitemap")
+
+    # Generate tests for the sitemap
+    tests = generate_site_tests(
+        config,
+        sitemap,
+        framework,
+        language,
+        os.path.join(output_dir, "test_scripts"),
+        use_vision
+    )
+
+    logger.info(f"Sitemap-based E2E process complete. Generated tests for {len(tests)} pages.")
+    logger.info(f"Results saved to {output_dir}")
+
+    return tests
+
 def main():
     """Main entry point."""
     try:
@@ -663,65 +774,92 @@ def main():
                 sys.exit(1)
             logger.info(f"Generated {args.framework} test scripts in {language}")
 
-        elif args.command == 'e2e' and args.site:
-            site_e2e_process(
-                config,
-                args.url,
-                args.max_pages,
-                args.framework,
-                args.language,
-                args.output,
-                False
-            )
-
-        elif args.command == 'vision-e2e' and args.site:
-            site_e2e_process(
-                config,
-                args.url,
-                args.max_pages,
-                args.framework,
-                args.language,
-                args.output,
-                True
-            )
-
         elif args.command == 'e2e':
-            # Pass screenshots option from e2e to crawl
-            output_files = process_end_to_end(
-                config,
-                args.url,
-                args.framework,
-                args.output
-            )
-            logger.info("End-to-end process completed successfully")
-            logger.info("Output files:")
-            for file_type, file_path in output_files.items():
-                logger.info(f"  {file_type}: {file_path}")
-
-        elif args.command == 'vision':
-            # Pass force_screenshot option to allow forcing new screenshots
-            output_file = analyze_page_with_vision(
-                config,
-                args.url,
-                args.output,
-                args.with_flow,
-                force_screenshot=getattr(args, 'with_screenshots', False)
-            )
-            logger.info(f"Vision analysis completed: {output_file}")
+            if args.sitemap_file:
+                # Run E2E process using a pre-generated sitemap
+                site_e2e_process_with_sitemap(
+                    config,
+                    args.sitemap_file,
+                    args.framework,
+                    args.language,
+                    args.output,
+                    False
+                )
+            elif args.site and args.url:
+                site_e2e_process(
+                    config,
+                    args.url,
+                    args.max_pages,
+                    args.framework,
+                    args.language,
+                    args.output,
+                    False
+                )
+            elif args.url:
+                # Pass screenshots option from e2e to crawl
+                output_files = process_end_to_end(
+                    config,
+                    args.url,
+                    args.framework,
+                    args.output
+                )
+                logger.info("End-to-end process completed successfully")
+                logger.info("Output files:")
+                for file_type, file_path in output_files.items():
+                    logger.info(f"  {file_type}: {file_path}")
+            else:
+                logger.error("Neither URL nor sitemap file was provided")
+                return 1
 
         elif args.command == 'vision-e2e':
-            language = getattr(args, 'language', 'java')
-            output_files = vision_e2e_process(
+            if args.sitemap_file:
+                # Run vision-enhanced E2E process using a pre-generated sitemap
+                site_e2e_process_with_sitemap(
+                    config,
+                    args.sitemap_file,
+                    args.framework,
+                    args.language,
+                    args.output,
+                    True
+                )
+            elif args.site and args.url:
+                site_e2e_process(
+                    config,
+                    args.url,
+                    args.max_pages,
+                    args.framework,
+                    args.language,
+                    args.output,
+                    True
+                )
+            elif args.url:
+                language = getattr(args, 'language', 'java')
+                output_files = vision_e2e_process(
+                    config,
+                    args.url,
+                    args.framework,
+                    args.output,
+                    args.with_flow
+                )
+                logger.info(f"Vision-based end-to-end process completed successfully using {language}")
+                logger.info("Output files:")
+                for file_type, file_path in output_files.items():
+                    logger.info(f"  {file_type}: {file_path}")
+            else:
+                logger.error("Neither URL nor sitemap file was provided")
+                return 1
+
+        elif args.command == 'sitemap':
+            # Process a pre-generated sitemap file
+            prepared_sitemap = process_sitemap_file(
                 config,
-                args.url,
-                args.framework,
-                args.output,
-                args.with_flow
+                args.file,
+                args.base_url,
+                args.include,
+                args.exclude,
+                args.output
             )
-            logger.info(f"Vision-based end-to-end process completed successfully using {language}")
-            logger.info("Output files:")
-            for file_type, file_path in output_files.items():
-                logger.info(f"  {file_type}: {file_path}")
+            logger.info(f"Processed sitemap with {len(prepared_sitemap)} URLs")
 
         else:
             logger.error("No command specified")

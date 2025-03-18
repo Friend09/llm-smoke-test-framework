@@ -571,3 +571,83 @@ public class BaseTest {
 
         # Capitalize each part and join
         return "".join(part.capitalize() for part in parts)
+
+    def generate_tests_from_sitemap(
+        self,
+        sitemap,
+        output_dir=None,
+        framework="cucumber",
+        language="java",
+        use_vision=False,
+        max_pages=None,
+        web_crawler=None
+    ):
+        """
+        Generate tests from a pre-generated sitemap.
+
+        Args:
+            sitemap: Dictionary mapping URLs to their metadata, or path to sitemap file
+            output_dir: Directory to output generated tests
+            framework: Test framework to generate for
+            language: Programming language to use
+            use_vision: Whether to use vision-enhanced analysis
+            max_pages: Maximum number of pages to process
+            web_crawler: Optional WebCrawler instance to use
+
+        Returns:
+            dict: Dictionary of generated test files
+        """
+        from core.sitemap_loader import SitemapLoader
+
+        # Set default paths if not provided
+        output_dir = output_dir or os.path.join(self.config.OUTPUT_DIR, "test_scripts")
+
+        # Ensure output directory exists
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Process sitemap input
+        sitemap_data = {}
+        if isinstance(sitemap, str):
+            # It's a file path
+            sitemap_loader = SitemapLoader(self.config)
+            urls = sitemap_loader.load_sitemap_from_file(sitemap)
+            sitemap_data = sitemap_loader.prepare_sitemap_for_testing(urls, os.path.dirname(output_dir))
+        else:
+            # It's already a dictionary
+            sitemap_data = sitemap
+
+        # Generate tests for each URL
+        all_pages = {}
+        from core.crawler import WebCrawler
+        crawler = web_crawler or WebCrawler(self.config)
+
+        try:
+            # Limit the number of pages if specified
+            urls = list(sitemap_data.keys())
+            if max_pages and len(urls) > max_pages:
+                logger.info(f"Limiting to {max_pages} pages from {len(urls)} total")
+                urls = urls[:max_pages]
+
+            # Process each URL
+            for url in urls:
+                logger.info(f"Extracting page data for {url}")
+                try:
+                    # Extract page data
+                    page_data = crawler.extract_page_data(url, with_screenshots=use_vision)
+                    all_pages[url] = page_data
+                except Exception as e:
+                    logger.error(f"Error extracting page data for {url}: {str(e)}")
+                    continue
+
+            # Generate tests for the extracted pages
+            return self.generate_tests(
+                discovered_pages_data=all_pages,
+                output_dir=output_dir,
+                framework=framework,
+                language=language,
+                use_vision=use_vision
+            )
+
+        finally:
+            if crawler and crawler != web_crawler:
+                crawler.close()

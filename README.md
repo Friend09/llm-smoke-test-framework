@@ -15,6 +15,7 @@ An automated framework that uses LLMs to generate smoke tests for web applicatio
     - [Core - LLM Analyzer](#core---llm-analyzer)
     - [Core - Web Crawler](#core---web-crawler)
     - [Core - Test Generator](#core---test-generator)
+    - [Core - Sitemap Loader](#core---sitemap-loader)
   - [⚙️ Usage](#️-usage)
     - [Command Reference](#command-reference)
     - [Basic Commands](#basic-commands)
@@ -28,6 +29,7 @@ An automated framework that uses LLMs to generate smoke tests for web applicatio
       - [Generating Tests from Vision Analysis](#generating-tests-from-vision-analysis)
       - [User Flow Testing](#user-flow-testing)
       - [Site-Wide Testing](#site-wide-testing)
+      - [Using External Sitemaps](#using-external-sitemaps)
     - [Working with Test Generator](#working-with-test-generator)
   - [📤 Output](#-output)
   - [🤝 Contributing](#-contributing)
@@ -42,6 +44,7 @@ An automated framework that uses LLMs to generate smoke tests for web applicatio
 - **Error Handling and Robustness:** Improved error handling and fallback mechanisms for increased reliability
 - **Configurable:** Easily adaptable to different testing frameworks and environments
 - **Modular Design:** Supports individual step execution for customized workflows
+- **External Sitemap Support:** Integrates with separately generated sitemaps for efficient testing
 
 ## 🚀 Quick Setup
 
@@ -127,6 +130,11 @@ llm-smoke-test-framework/
 - `generate_login_tests`: Generate login-specific test cases
 - `_generate_test_suite`: Generate a test suite file that includes all tests.
 
+### Core - Sitemap Loader
+
+- `load_sitemap`: Loads pre-generated sitemaps from an external repository
+- `parse_sitemap`: Parses sitemap data to extract URLs for testing
+
 ## ⚙️ Usage
 
 ### Command Reference
@@ -143,6 +151,7 @@ llm-smoke-test-framework/
 | `vision-e2e --with-flow` | Runs end-to-end process with user flow.                                       |
 | `e2e --site`             | Runs end-to-end process for an entire website.                                |
 | `vision-e2e --site`      | Runs vision-enhanced end-to-end process for an entire website.                |
+| `sitemap`                | Loads and processes a pre-generated sitemap for testing.                      |
 
 ### Basic Commands
 
@@ -348,6 +357,24 @@ When using site-wide testing, the framework:
 7. **Produces a summary report**: Creates documentation with pages tested and test coverage stats
 
 The output structure for site-wide tests:
+
+#### Using External Sitemaps
+
+The framework supports using pre-generated sitemaps from an external repository for efficient testing.
+
+```bash
+# Load and process a pre-generated sitemap
+python run.py sitemap https://example.com/sitemap.xml
+```
+
+When using external sitemaps, the framework:
+
+1. **Loads the sitemap**: Fetches the sitemap from the provided URL
+2. **Parses the sitemap**: Extracts URLs for testing
+3. **Generates tests**: Creates tests for each URL in the sitemap
+4. **Produces a summary report**: Documents the pages tested and test coverage stats
+
+For additional details on working with external sitemaps, including supported formats, filtering options, and integration workflows, see the [external sitemaps documentation](docs/using_external_sitemaps.md).
 
 ### Working with Test Generator
 
