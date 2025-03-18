@@ -1,0 +1,3 @@
+[submodule "ref_sitemap_generator"]
+	path = ref_sitemap_generator
+	url = git@github.com:Friend09/sitemap_generator.git
