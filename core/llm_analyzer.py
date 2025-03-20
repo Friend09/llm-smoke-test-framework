@@ -1043,6 +1043,92 @@ class LLMAnalyzer:
                 "page_object": "// Error in test generation",
             }
 
+    def _extract_interactions_from_user_flow(self, page_data):
+        """
+        Extract all successful interactions from user flow data.
+
+        Args:
+            page_data (dict): Page data that might contain user_flow
+
+        Returns:
+            dict: Extracted interactions, credentials, and sequence information
+        """
+        result = {
+            "username": None,
+            "password": None,
+            "interactions": [],
+            "successful_actions": [],
+            "verified_flow": False,
+            "sequence": []
+        }
+
+        if not page_data or "user_flow" not in page_data:
+            return result
+
+        user_flow = page_data.get("user_flow", [])
+
+        # Extract all successful interactions
+        for step in user_flow:
+            if not step.get("success", False):
+                continue
+
+            description = step.get("description", "").lower()
+            result["successful_actions"].append(description)
+
+            # Track the sequence of actions
+            action = {
+                "description": description,
+                "url": step.get("url"),
+                "type": None,
+                "element": None,
+                "value": None
+            }
+
+            # Extract action type and details
+            if description.startswith("click "):
+                action["type"] = "click"
+                action["element"] = description[6:].strip()
+
+            elif description.startswith("type "):
+                action["type"] = "type"
+                parts = description[5:].strip().split(" into ")
+                if len(parts) == 2:
+                    action["value"] = parts[0].strip()
+                    action["element"] = parts[1].strip()
+
+                    # Store common credentials if found
+                    if "username" in parts[1] or "email" in parts[1] or "user" in parts[1]:
+                        result["username"] = parts[0].strip()
+                    elif "password" in parts[1] or "pwd" in parts[1]:
+                        result["password"] = parts[0].strip()
+
+            elif description.startswith("select "):
+                action["type"] = "select"
+                parts = description[7:].strip().split(" from ")
+                if len(parts) == 2:
+                    action["value"] = parts[0].strip()
+                    action["element"] = parts[1].strip()
+
+            # Add any other interaction types here
+            # e.g., checkboxes, radio buttons, drag-and-drop, etc.
+
+            # Add to interactions list and sequence
+            if action["type"]:
+                result["interactions"].append(action)
+                result["sequence"].append(action)
+
+        # Determine if we have a verified flow
+        result["verified_flow"] = len(result["successful_actions"]) > 0 and (
+            # Did we complete a submission?
+            any("submit" in action for action in result["successful_actions"]) or
+            any("login" in action for action in result["successful_actions"]) or
+            # Did we do a click after entering data?
+            (result["username"] or result["password"]) and any("click" in action for action in result["successful_actions"])
+        )
+
+        return result
+
+    # Replace the old _extract_credentials_from_user_flow function usage in _format_test_generation_prompt
     def _format_test_generation_prompt(self, page_analysis, language="java", format_instructions=""):
         """
         Format the test generation prompt with page analysis data.
@@ -1055,7 +1141,6 @@ class LLMAnalyzer:
         Returns:
             list: Formatted messages for the LLM
         """
-
         # Add examples of well-formed feature files and step definitions
         example_features = """
         Feature: Smoke-QA
@@ -1068,29 +1153,18 @@ class LLMAnalyzer:
 
             Scenario: verify new product page
                 Given user launches browser in "Edge"
-                # And user opens URL "http://server/domain.products/some_page.aspx"
                 And user opens URL "QA_URL"
                 When user mouse hover the link "Products"
                 And user click on the link "New Product"
-                And user verifies "New Product Steps is "present" on screen
+                And user verifies "New Product Steps" is "present" on screen
 
             Background: User Logged in
-            # Scenario: verify home page
                 Given I open the url "SOMEURL"
                 When I add "UserName" to the inputfield "UserName"
                 When I add "pwd" to the inputfield "word"
                 And I click on the Login element "Login"
                 And I pause for 2000 ms
                 Then I expect that the url is "SOMEURL"
-
-            Scenario: copy existing id
-                And I click on the element on the Screen "Edit"
-                And I click on the element on the Screen "Copy"
-                Then I expect that element is Present in frame
-                Then I expect that element "Search" is displayed on Screen
-                Then I expect that element "Close" is displayed on Screen
-                And I click on the element on Screen "Close"
-                Then I expect that element is returned from frame
         """
 
         example_steps = """
@@ -1104,57 +1178,28 @@ class LLMAnalyzer:
             public void iEnterIntoTheUsernameField(String username) {
                 loginPage.enterUsername(username);
             }
-            """
+        """
 
-        # Prepare the prompt with extra emphasis on proper JSON formatting
-        prompt = ChatPromptTemplate.from_template(
-            """
-            You are an expert in automated testing using Cucumber with {language}.
+        # Extract user flow data if available
+        interactions = self._extract_interactions_from_user_flow(page_analysis.get("raw_page_data", {}))
 
-            EXAMPLE FEATURE FILE:
-            {example_features}
+        # Create user flow section for the prompt
+        user_flow_str = ""
+        if interactions["verified_flow"]:
+            user_flow_str = "VERIFIED USER INTERACTIONS:\n"
 
-            EXAMPLE STEP DEFINITIONS:
-            {example_steps}
+            if interactions["username"] or interactions["password"]:
+                user_flow_str += "USER CREDENTIALS:\n"
+                if interactions["username"]:
+                    user_flow_str += f"- Verified Username: {interactions['username']}\n"
+                if interactions["password"]:
+                    user_flow_str += f"- Verified Password: {interactions['password']}\n"
 
-            Generate Cucumber test scripts for the following page based on the analysis:
+            user_flow_str += "\nACTION SEQUENCE:\n"
+            for i, action in enumerate(interactions["sequence"]):
+                user_flow_str += f"{i+1}. {action['description']}\n"
 
-            PAGE URL: {url}
-            PAGE TITLE: {title}
-
-            PAGE ANALYSIS:
-            {page_analysis_summary}
-
-            UNIQUE IDENTIFIERS:
-            {unique_identifiers}
-
-            KEY ELEMENTS:
-            {key_elements}
-
-            TEST SCENARIOS:
-            {test_scenarios}
-
-            SMOKE TEST STEPS:
-            {smoke_test_steps}
-
-            LOCATOR STRATEGIES:
-            {locator_strategies}
-
-            Generate the following files:
-            1. A Cucumber feature file (.feature) for smoke testing this page
-            2. Step definitions that implement the feature file steps
-            3. A page object model for this page
-
-            IMPORTANT GUIDELINES:
-            - Do NOT assume this is a login page unless explicitly mentioned in the analysis
-            - Create tests based on the actual page purpose and elements discovered
-            - The code should follow best practices for the {language} framework and include appropriate comments
-            - Handle potential errors and edge cases
-            - Keep scenarios focused on main user flows for the specific page type
-
-            {format_instructions}
-            """
-        )
+            user_flow_str += "\nIMPORTANT: Use these verified interactions in your test cases as they are known to work.\n"
 
         # Extract page information
         url = page_analysis.get("url", "")
@@ -1177,7 +1222,61 @@ class LLMAnalyzer:
         smoke_test_steps_str = json.dumps(page_analysis.get("smoke_test_steps", []), indent=2)
         locator_strategies_str = json.dumps(page_analysis.get("locator_strategies", {}), indent=2)
 
-        # Create the formatted prompt
+        # Prepare the prompt with extra emphasis on proper JSON formatting
+        prompt = ChatPromptTemplate.from_template(
+            """
+            You are an expert in automated testing using Cucumber with {language}.
+
+            EXAMPLE FEATURE FILE:
+            {example_features}
+
+            EXAMPLE STEP DEFINITIONS:
+            {example_steps}
+
+            Generate Cucumber test scripts for the following page based on the analysis:
+
+            PAGE URL: {url}
+            PAGE TITLE: {title}
+
+            PAGE ANALYSIS:
+            {page_analysis_summary}
+
+            {user_flow}
+
+            UNIQUE IDENTIFIERS:
+            {unique_identifiers}
+
+            KEY ELEMENTS:
+            {key_elements}
+
+            TEST SCENARIOS:
+            {test_scenarios}
+
+            SMOKE TEST STEPS:
+            {smoke_test_steps}
+
+            LOCATOR STRATEGIES:
+            {locator_strategies}
+
+            Generate the following files:
+            1. A Cucumber feature file (.feature) for smoke testing this page
+            2. Step definitions that implement the feature file steps
+            3. A page object model for this page
+
+            IMPORTANT GUIDELINES:
+            - If verified credentials are provided, use them in your test scenarios
+            - Create tests based on the successful user flow actions if available
+            - Do NOT assume this is a login page unless explicitly mentioned in the analysis
+            - Create tests based on the actual page purpose and elements discovered
+            - The code should follow best practices for the {language} framework and include appropriate comments
+            - Handle potential errors and edge cases
+            - Keep scenarios focused on main user flows for the specific page type
+
+            {format_instructions}
+            """
+        )
+
+        # Create the formatted prompt and return it
         return prompt.format_messages(
             url=url,
             title=title,
@@ -1191,4 +1290,5 @@ class LLMAnalyzer:
             locator_strategies=locator_strategies_str,
             language=language,
             format_instructions=format_instructions,
+            user_flow=user_flow_str,
         )

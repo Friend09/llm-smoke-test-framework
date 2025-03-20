@@ -524,8 +524,17 @@ class WebCrawler:
         logical_sections = self.driver.execute_script(script)
         page_data["logical_sections"] = logical_sections
 
-    def crawl_with_user_flow(self, url, flow_description):
-        """Crawl a page while simulating a user flow."""
+    def crawl_with_user_flow(self, url, flow_description, output_dir=None):
+        """Crawl a page while simulating a user flow.
+
+        Args:
+            url: Page URL to crawl
+            flow_description: Text description of the user flow
+            output_dir: Optional output directory for saving screenshots
+
+        Returns:
+            dict: Page data with user flow information
+        """
 
         # First get the base page
         page_data = self.extract_page_data(url)
@@ -536,7 +545,18 @@ class WebCrawler:
         # Record the flow steps and their results
         page_data["user_flow"] = []
 
-        for step in steps:
+        # Determine screenshot directory path
+        if output_dir:
+            screenshot_dir = os.path.join(output_dir, "screenshots")
+        else:
+            screenshot_dir = os.path.join(self.config.OUTPUT_DIR, "screenshots")
+
+        # Ensure screenshot directory exists
+        os.makedirs(screenshot_dir, exist_ok=True)
+
+        logger.info(f"Step screenshots will be saved to: {screenshot_dir}")
+
+        for step_index, step in enumerate(steps):
             try:
                 step = step.strip()
                 if not step or step.startswith('#'):  # Skip empty lines or comments
@@ -565,9 +585,7 @@ class WebCrawler:
                         step_result["success"] = True
 
                 # Take screenshot after each step
-                screenshot_dir = os.path.join(self.config.OUTPUT_DIR, "screenshots")
-                os.makedirs(screenshot_dir, exist_ok=True)
-                screenshot_path = os.path.join(screenshot_dir, f"step_{len(page_data['user_flow'])}.png")
+                screenshot_path = os.path.join(screenshot_dir, f"step_{step_index+1}.png")
                 self.driver.save_screenshot(screenshot_path)
                 step_result["screenshot"] = screenshot_path
 

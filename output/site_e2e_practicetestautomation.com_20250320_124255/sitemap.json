@@ -1,0 +1,27 @@
+{
+  "https://practicetestautomation.com/practice-test-login/": {
+    "title": "Test Login | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250320_124255/page_data/practicetestautomation.com_practice-test-login_.json",
+    "analysis_path": "output/site_e2e_practicetestautomation.com_20250320_124255/analysis/practicetestautomation.com_practice-test-login__vision_analysis.json"
+  },
+  "https://practicetestautomation.com/": {
+    "title": "Practice Test Automation | Learn Selenium WebDriver",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250320_124255/page_data/practicetestautomation.com_.json",
+    "analysis_path": "output/site_e2e_practicetestautomation.com_20250320_124255/analysis/practicetestautomation.com__vision_analysis.json"
+  },
+  "https://practicetestautomation.com/practice/": {
+    "title": "Practice | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250320_124255/page_data/practicetestautomation.com_practice_.json",
+    "analysis_path": "output/site_e2e_practicetestautomation.com_20250320_124255/analysis/practicetestautomation.com_practice__vision_analysis.json"
+  },
+  "https://practicetestautomation.com/courses/": {
+    "title": "Courses | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250320_124255/page_data/practicetestautomation.com_courses_.json",
+    "analysis_path": "output/site_e2e_practicetestautomation.com_20250320_124255/analysis/practicetestautomation.com_courses__vision_analysis.json"
+  },
+  "https://practicetestautomation.com/blog/": {
+    "title": "Blog | Practice Test Automation",
+    "file_path": "output/site_e2e_practicetestautomation.com_20250320_124255/page_data/practicetestautomation.com_blog_.json",
+    "analysis_path": "output/site_e2e_practicetestautomation.com_20250320_124255/analysis/practicetestautomation.com_blog__vision_analysis.json"
+  }
+}

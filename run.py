@@ -287,7 +287,8 @@ def analyze_page_with_vision(config: Config, url: str, output_filename: Optional
                 logger.warning(f"User flow file is empty: {flow_file}")
 
             logger.info(f"Using user flow from {flow_file}")
-            page_data = crawler.crawl_with_user_flow(url, flow_description)
+            # Pass the output_dir parameter to ensure step screenshots are saved in the site-specific directory
+            page_data = crawler.crawl_with_user_flow(url, flow_description, output_dir=output_dir)
             logger.info(f"User flow execution completed with {len(page_data.get('user_flow', []))} steps")
         else:
             # Regular crawl with screenshots enabled - pass output_dir if provided
@@ -304,9 +305,23 @@ def analyze_page_with_vision(config: Config, url: str, output_filename: Optional
                 "error": "Page data extraction failed"
             }
 
-        # Save page data
-        page_data_file = crawler.save_page_data(page_data)
-        logger.info(f"Saved page data to {page_data_file}")
+        # Save page data to the site-specific directory if provided
+        if output_dir:
+            page_data_dir = os.path.join(output_dir, "page_data")
+            os.makedirs(page_data_dir, exist_ok=True)
+
+            # Generate a safe filename
+            safe_filename = url.replace("https://", "").replace("http://", "").replace("/", "_")
+            page_data_file = os.path.join(page_data_dir, f"{safe_filename}.json")
+
+            with open(page_data_file, 'w', encoding='utf-8') as f:
+                json.dump(page_data, f, indent=2)
+
+            logger.info(f"Saved page data to {page_data_file}")
+        else:
+            # Use the default method if no specific output directory
+            page_data_file = crawler.save_page_data(page_data)
+            logger.info(f"Saved page data to {page_data_file}")
 
         # Ensure page_data has screenshot_path
         has_screenshot = isinstance(page_data, dict) and "screenshot_path" in page_data
@@ -355,6 +370,10 @@ def analyze_page_with_vision(config: Config, url: str, output_filename: Optional
                 "error": "Analysis failed",
                 "smoke_test_steps": ["Visit the page and verify it loads"]
             }
+
+        # Preserve user flow data in the analysis if it exists
+        if isinstance(page_data, dict) and "user_flow" in page_data:
+            analysis["user_flow"] = page_data["user_flow"]
 
         # Save analysis to the appropriate directory
         if output_dir:
@@ -423,16 +442,27 @@ def vision_e2e_process(
         vision_output_dir = os.path.join(config.OUTPUT_DIR, output_prefix or f"vision_e2e_{url_domain}_{timestamp}")
         os.makedirs(vision_output_dir, exist_ok=True)
 
-        # Create screenshots directory within this folder
+        # Create subdirectories within the site-specific folder
         screenshots_dir = os.path.join(vision_output_dir, "screenshots")
-        os.makedirs(screenshots_dir, exist_ok=True)
+        analysis_dir = os.path.join(vision_output_dir, "analysis")
+        page_data_dir = os.path.join(vision_output_dir, "page_data")
+        test_scripts_dir = os.path.join(vision_output_dir, "test_scripts")
+
+        # Create all needed subdirectories
+        for directory in [screenshots_dir, analysis_dir, page_data_dir, test_scripts_dir]:
+            os.makedirs(directory, exist_ok=True)
 
         # Step 1: Analyze with vision capabilities
         logger.info(f"Starting vision-based end-to-end process for {url}")
         try:
             # Use the vision-specific output directory for analysis
-            analysis_file = analyze_page_with_vision(config, url, output_prefix, flow_file,
-                                                    output_dir=vision_output_dir)
+            analysis_file = analyze_page_with_vision(
+                config,
+                url,
+                output_prefix,
+                flow_file,
+                output_dir=vision_output_dir
+            )
             output_files["analysis"] = analysis_file
 
             # Load the analysis to use directly in test generation
@@ -458,23 +488,20 @@ def vision_e2e_process(
         # Step 2: Generate test scripts from the analysis
         try:
             test_gen = TestGenerator(config)
-            output_dir = os.path.join(config.test_scripts_path, "vision_tests")
-            if output_prefix:
-                output_dir = os.path.join(output_dir, output_prefix)
 
-            os.makedirs(output_dir, exist_ok=True)
-
-            logger.info(f"Generating test scripts with vision-enhanced analysis in {output_dir}")
+            # Use the site-specific test scripts directory
+            logger.info(f"Generating test scripts with vision-enhanced analysis in {test_scripts_dir}")
             generated_tests = test_gen.generate_tests(
                 discovered_pages_data={url: analysis_data},
-                output_dir=output_dir,
-                framework=framework
+                output_dir=test_scripts_dir,  # Use the site-specific directory
+                framework=framework,
+                language="java"  # Make sure we explicitly pass language
             )
 
             # Add test files to output
             for test_url, script in generated_tests.items():
                 safe_url = test_gen._safe_filename(test_url)
-                test_file = os.path.join(output_dir, f"{safe_url}_spec.feature")
+                test_file = os.path.join(test_scripts_dir, f"{safe_url}_spec.feature")
                 output_files[f"test_{safe_url}"] = test_file
 
             logger.info(f"Vision-based end-to-end process completed with {len(generated_tests)} test files")
@@ -925,6 +952,9 @@ def main():
 
         elif args.command == 'vision-e2e':
             logger.info(f"Starting vision-e2e with URL: {args.url}, site mode: {args.site}, max pages: {args.max_pages}")
+            # Create output directory prefix if specified
+            output_prefix = args.output
+
             if args.sitemap_file:
                 # Run vision-enhanced E2E process using a pre-generated sitemap
                 site_e2e_process_with_sitemap(
@@ -971,10 +1001,37 @@ def main():
                     config,
                     args.url,
                     args.framework,
-                    args.output,
+                    output_prefix,
                     args.with_flow
                 )
                 logger.info(f"Vision end-to-end process completed. Output files: {output_files}")
+
+                # Print summary of results
+                print("\nVision E2E Test Generation Complete")
+                print("====================================")
+                print(f"URL: {args.url}")
+
+                # Get the output directory path
+                if output_prefix:
+                    output_dir = os.path.join(config.OUTPUT_DIR, output_prefix)
+                else:
+                    url_domain = urllib.parse.urlparse(args.url).netloc
+                    # Find the most recent directory
+                    vision_dirs = [d for d in os.listdir(config.OUTPUT_DIR)
+                                  if d.startswith(f"vision_e2e_{url_domain}") and
+                                  os.path.isdir(os.path.join(config.OUTPUT_DIR, d))]
+                    if vision_dirs:
+                        vision_dirs.sort(reverse=True)
+                        output_dir = os.path.join(config.OUTPUT_DIR, vision_dirs[0])
+                    else:
+                        output_dir = None
+
+                if output_dir:
+                    print(f"Output directory: {output_dir}")
+                    print("\nGenerated files:")
+                    print(f"  - Analysis: {len(os.listdir(os.path.join(output_dir, 'analysis')))} files")
+                    print(f"  - Screenshots: {len(os.listdir(os.path.join(output_dir, 'screenshots')))} files")
+                    print(f"  - Test Scripts: {os.path.join(output_dir, 'test_scripts')}")
             else:
                 logger.error("URL or sitemap file must be provided for vision end-to-end process.")
                 return 1

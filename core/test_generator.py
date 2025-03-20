@@ -51,7 +51,7 @@ class TestGenerator:
         # Set default paths if not provided
         output_dir = output_dir or os.path.join(self.config.OUTPUT_DIR, "test_scripts")
 
-        # Ensure output directory exists
+        # Ensure output directory exists (create parent directories if needed)
         os.makedirs(output_dir, exist_ok=True)
 
         # Dictionary to store generated test files
@@ -121,7 +121,11 @@ class TestGenerator:
                         logger.info(f"Using standard analysis for {url}")
                         page_analysis = self.llm_analyzer.analyze_page(page_data)
 
-                # Generate test script
+                # Generate test script with raw page data included for user flow extraction
+                if "user_flow" in page_data:
+                    # Store the raw page data that contains user flow information
+                    page_analysis["raw_page_data"] = page_data
+
                 test_script = self.llm_analyzer.generate_test_script(
                     page_analysis, framework
                 )
@@ -139,6 +143,7 @@ class TestGenerator:
         # Generate test suite file
         self._generate_test_suite(generated_tests, output_dir, framework, language)
 
+        # Return the generated tests dictionary
         return generated_tests
 
     def generate_login_tests(self):
