@@ -257,7 +257,7 @@ def process_end_to_end(
 
     return output_files
 
-def analyze_page_with_vision(config: Config, url: str, output_filename: Optional[str] = None, flow_file: Optional[str] = None, force_screenshot: bool = False) -> str:
+def analyze_page_with_vision(config: Config, url: str, output_filename: Optional[str] = None, flow_file: Optional[str] = None, force_screenshot: bool = False, output_dir: Optional[str] = None) -> str:
     """Analyze page with GPT-4o-mini vision capabilities.
 
     Args:
@@ -266,6 +266,7 @@ def analyze_page_with_vision(config: Config, url: str, output_filename: Optional
         output_filename (Optional[str]): Output filename
         flow_file (Optional[str]): User flow description file
         force_screenshot (bool): Whether to force a new screenshot capture
+        output_dir (Optional[str]): Output directory
 
     Returns:
         str: Path to the saved analysis file
@@ -289,9 +290,9 @@ def analyze_page_with_vision(config: Config, url: str, output_filename: Optional
             page_data = crawler.crawl_with_user_flow(url, flow_description)
             logger.info(f"User flow execution completed with {len(page_data.get('user_flow', []))} steps")
         else:
-            # Regular crawl with screenshots enabled
+            # Regular crawl with screenshots enabled - pass output_dir if provided
             logger.info("Capturing page data with screenshots")
-            page_data = crawler.extract_page_data(url, with_screenshots=True)
+            page_data = crawler.extract_page_data(url, with_screenshots=True, output_dir=output_dir)
 
         # Check if page_data is valid
         if page_data is None:
@@ -311,7 +312,13 @@ def analyze_page_with_vision(config: Config, url: str, output_filename: Optional
         has_screenshot = isinstance(page_data, dict) and "screenshot_path" in page_data
         if not has_screenshot or not os.path.exists(page_data.get("screenshot_path", "")):
             logger.warning("No screenshot captured or invalid screenshot path. Taking screenshot now.")
-            screenshot_dir = os.path.join(config.OUTPUT_DIR, "screenshots")
+
+            # Use site-specific screenshot directory if provided
+            if output_dir:
+                screenshot_dir = os.path.join(output_dir, "screenshots")
+            else:
+                screenshot_dir = os.path.join(config.OUTPUT_DIR, "screenshots")
+
             os.makedirs(screenshot_dir, exist_ok=True)
 
             safe_filename = url.replace("https://", "").replace("http://", "").replace("/", "_")
@@ -349,6 +356,15 @@ def analyze_page_with_vision(config: Config, url: str, output_filename: Optional
                 "smoke_test_steps": ["Visit the page and verify it loads"]
             }
 
+        # Save analysis to the appropriate directory
+        if output_dir:
+            # If output_dir is provided, save analysis there
+            analysis_dir = os.path.join(output_dir, "analysis")
+            os.makedirs(analysis_dir, exist_ok=True)
+        else:
+            # Otherwise use default
+            analysis_dir = config.analysis_path
+
         # Save analysis
         if output_filename:
             base_name = os.path.splitext(output_filename)[0]
@@ -357,7 +373,7 @@ def analyze_page_with_vision(config: Config, url: str, output_filename: Optional
             safe_filename = url.replace("https://", "").replace("http://", "").replace("/", "_")
             analysis_filename = f"{safe_filename}_vision_analysis.json"
 
-        analysis_path = os.path.join(config.analysis_path, analysis_filename)
+        analysis_path = os.path.join(analysis_dir, analysis_filename)
         with open(analysis_path, 'w') as f:
             json.dump(analysis, f, indent=2)
 
@@ -398,24 +414,25 @@ def vision_e2e_process(
     output_prefix: Optional[str] = None,
     flow_file: Optional[str] = None
 ) -> Dict[str, str]:
-    """Process end-to-end with vision capabilities.
-
-    Args:
-        config (Config): Configuration object
-        url (str): URL to crawl
-        framework (str): Test framework to use
-        output_prefix (Optional[str]): Output file prefix
-        flow_file (Optional[str]): User flow description file
-
-    Returns:
-        Dict[str, str]: Dictionary of output files
-    """
+    """Process end-to-end with vision capabilities."""
     output_files = {}
     try:
+        # Create site-specific output directory
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        url_domain = urllib.parse.urlparse(url).netloc
+        vision_output_dir = os.path.join(config.OUTPUT_DIR, output_prefix or f"vision_e2e_{url_domain}_{timestamp}")
+        os.makedirs(vision_output_dir, exist_ok=True)
+
+        # Create screenshots directory within this folder
+        screenshots_dir = os.path.join(vision_output_dir, "screenshots")
+        os.makedirs(screenshots_dir, exist_ok=True)
+
         # Step 1: Analyze with vision capabilities
         logger.info(f"Starting vision-based end-to-end process for {url}")
         try:
-            analysis_file = analyze_page_with_vision(config, url, output_prefix, flow_file)
+            # Use the vision-specific output directory for analysis
+            analysis_file = analyze_page_with_vision(config, url, output_prefix, flow_file,
+                                                    output_dir=vision_output_dir)
             output_files["analysis"] = analysis_file
 
             # Load the analysis to use directly in test generation
@@ -478,13 +495,21 @@ def crawl_site(config: Config, base_url: str, max_pages: int = 50, output_dir: O
     output_dir = output_dir or config.OUTPUT_DIR
     os.makedirs(output_dir, exist_ok=True)
 
+    logger.info(f"Starting site crawl from {base_url} with max_pages={max_pages}")
+
     # Create a sitemap crawler
     sitemap_crawler = SitemapCrawler(config)
 
     # Crawl the site
-    sitemap = sitemap_crawler.crawl_site(base_url, max_pages, output_dir)
-
-    return sitemap
+    try:
+        logger.info("Initializing site crawler")
+        sitemap = sitemap_crawler.crawl_site(base_url, max_pages, output_dir)
+        logger.info(f"Site crawl completed with {len(sitemap)} pages discovered")
+        return sitemap
+    except Exception as e:
+        logger.error(f"Error during site crawl: {str(e)}", exc_info=True)
+        # Return empty sitemap in case of error
+        return {}
 
 def generate_site_tests(
     config: Config,
@@ -500,8 +525,8 @@ def generate_site_tests(
     os.makedirs(output_dir, exist_ok=True)
 
     # Initialize the LLM analyzer and test generator
-    # Don't pass llm_analyzer to TestGenerator - it will create its own instance
     test_generator = TestGenerator(config)
+    llm_analyzer = LLMAnalyzer(config)
 
     generated_tests = {}
     page_data_map = {}
@@ -518,6 +543,19 @@ def generate_site_tests(
                 file_path = sitemap[url]["file_path"]
                 with open(file_path, 'r') as f:
                     page_data = json.load(f)
+
+                # If we have pre-generated analysis, use it
+                if "analysis_path" in sitemap[url] and os.path.exists(sitemap[url]["analysis_path"]):
+                    try:
+                        with open(sitemap[url]["analysis_path"], 'r') as f:
+                            analysis_data = json.load(f)
+
+                        # Merge analysis data with page data
+                        page_data["analysis"] = analysis_data
+                        logger.info(f"Using pre-generated analysis for {url}")
+                    except Exception as e:
+                        logger.warning(f"Could not load analysis for {url}: {str(e)}")
+
                 page_data_map[url] = page_data
             except Exception as e:
                 logger.error(f"Error loading page data for {url}: {str(e)}")
@@ -586,13 +624,192 @@ def site_e2e_process(
     output_dir_name = output_prefix or f"site_e2e_{site_domain}_{timestamp}"
     output_dir = os.path.join(config.OUTPUT_DIR, output_dir_name)
 
+    # Create screenshots directory within site folder
+    screenshots_dir = os.path.join(output_dir, "screenshots")
+    os.makedirs(screenshots_dir, exist_ok=True)
+
     logger.info(f"Starting site-wide E2E process for {base_url}")
     logger.info(f"Output will be saved to {output_dir}")
 
     # Step 1: Crawl the site
+    logger.info("Step 1: Crawling site to discover pages...")
     sitemap = crawl_site(config, base_url, max_pages, output_dir)
 
-    # Step 2: Generate tests for the entire site
+    if not sitemap:
+        logger.error("Site crawl failed or returned empty sitemap. Exiting process.")
+        return {}
+
+    logger.info(f"Site crawl completed. Found {len(sitemap)} pages.")
+
+    # Create analysis directory
+    analysis_dir = os.path.join(output_dir, "analysis")
+    os.makedirs(analysis_dir, exist_ok=True)
+
+    # Step 2: If use_vision is enabled, capture screenshots for all pages
+    if use_vision:
+        logger.info("Step 2: Vision mode enabled - capturing screenshots for all pages")
+
+        # Create WebDriver once and reuse
+        crawler = WebCrawler(config)
+        analyzer = LLMAnalyzer(config)
+        try:
+            # Process pages in batches to avoid memory issues
+            urls = list(sitemap.keys())
+            batch_size = 3  # Process pages in small batches
+
+            for i in range(0, len(urls), batch_size):
+                batch_urls = urls[i:i+batch_size]
+                logger.info(f"Processing batch {i//batch_size + 1}/{(len(urls)+batch_size-1)//batch_size}, pages {i+1}-{min(i+batch_size, len(urls))}")
+
+                for url in batch_urls:
+                    try:
+                        logger.info(f"Processing {url} with vision analysis")
+
+                        # Check if we already have page data
+                        page_data = None
+                        if "file_path" in sitemap[url] and os.path.exists(sitemap[url]["file_path"]):
+                            with open(sitemap[url]["file_path"], 'r') as f:
+                                page_data = json.load(f)
+                            logger.info(f"Loaded existing page data from {sitemap[url]['file_path']}")
+
+                        # If we don't have page data or it needs screenshots, extract it
+                        if not page_data or "screenshot_path" not in page_data or not os.path.exists(page_data.get("screenshot_path", "")):
+                            logger.info(f"Capturing screenshot for {url}")
+                            # Pass the site-specific output_dir to ensure screenshots are saved in the site folder
+                            page_data = crawler.extract_page_data(url, with_screenshots=True, output_dir=output_dir)
+
+                            if not page_data:
+                                logger.error(f"Failed to extract page data for {url}")
+                                continue
+
+                            # Save page data to file if it doesn't exist
+                            if "file_path" not in sitemap[url] or not os.path.exists(sitemap[url]["file_path"]):
+                                safe_filename = url.replace("https://", "").replace("http://", "").replace("/", "_")
+                                page_data_file = os.path.join(output_dir, "page_data", f"{safe_filename}.json")
+                                os.makedirs(os.path.dirname(page_data_file), exist_ok=True)
+
+                                with open(page_data_file, 'w') as f:
+                                    json.dump(page_data, f, indent=2)
+
+                                sitemap[url]["file_path"] = page_data_file
+                                logger.info(f"Saved page data to {page_data_file}")
+
+                            # Update existing page data file with screenshot information
+                            elif "file_path" in sitemap[url] and os.path.exists(sitemap[url]["file_path"]):
+                                with open(sitemap[url]["file_path"], 'r') as f:
+                                    existing_data = json.load(f)
+
+                                # Add screenshot path to existing data
+                                if "screenshot_path" in page_data:
+                                    existing_data["screenshot_path"] = page_data["screenshot_path"]
+
+                                    # Save updated page data
+                                    with open(sitemap[url]["file_path"], 'w') as f:
+                                        json.dump(existing_data, f, indent=2)
+
+                                    # Use the updated data
+                                    page_data = existing_data
+                                    logger.info(f"Screenshot path added to page data: {page_data['screenshot_path']}")
+
+                        # Generate and save analysis with vision
+                        if page_data and "screenshot_path" in page_data and os.path.exists(page_data["screenshot_path"]):
+                            logger.info(f"Generating vision analysis for {url} with screenshot: {page_data['screenshot_path']}")
+
+                            try:
+                                # Generate analysis with timeout protection
+                                import threading
+                                analysis_result = [None]
+                                analysis_error = [None]
+
+                                def analyze_with_timeout():
+                                    try:
+                                        analysis_result[0] = analyzer.analyze_page_with_vision(page_data)
+                                    except Exception as e:
+                                        analysis_error[0] = str(e)
+
+                                analysis_thread = threading.Thread(target=analyze_with_timeout)
+                                analysis_thread.daemon = True
+                                analysis_thread.start()
+                                analysis_thread.join(timeout=300)  # 5-minute timeout
+
+                                if analysis_thread.is_alive():
+                                    logger.error(f"Vision analysis timed out for {url}")
+                                    analysis = None
+                                elif analysis_error[0]:
+                                    logger.error(f"Vision analysis failed: {analysis_error[0]}")
+                                    analysis = None
+                                else:
+                                    analysis = analysis_result[0]
+
+                                if not analysis:
+                                    logger.warning(f"Vision analysis failed, falling back to standard analysis for {url}")
+                                    analysis = analyzer.analyze_page(page_data)
+
+                                # Save analysis to file
+                                safe_filename = url.replace("https://", "").replace("http://", "").replace("/", "_")
+                                analysis_filename = f"{safe_filename}_vision_analysis.json"
+                                analysis_path = os.path.join(analysis_dir, analysis_filename)
+
+                                with open(analysis_path, 'w') as f:
+                                    json.dump(analysis, f, indent=2)
+
+                                logger.info(f"Saved vision analysis to {analysis_path}")
+
+                                # Add analysis path to sitemap
+                                sitemap[url]["analysis_path"] = analysis_path
+                            except Exception as e:
+                                logger.error(f"Error generating vision analysis for {url}: {str(e)}", exc_info=True)
+
+                                # Fallback to standard analysis
+                                analysis = analyzer.analyze_page(page_data)
+
+                                # Save standard analysis
+                                safe_filename = url.replace("https://", "").replace("http://", "").replace("/", "_")
+                                analysis_filename = f"{safe_filename}_analysis.json"
+                                analysis_path = os.path.join(analysis_dir, analysis_filename)
+
+                                with open(analysis_path, 'w') as f:
+                                    json.dump(analysis, f, indent=2)
+
+                                logger.info(f"Saved standard analysis to {analysis_path}")
+
+                                # Add analysis path to sitemap
+                                sitemap[url]["analysis_path"] = analysis_path
+                        else:
+                            logger.warning(f"No screenshot available for vision analysis of {url}")
+
+                            # Fallback to standard analysis
+                            analysis = analyzer.analyze_page(page_data)
+
+                            # Save standard analysis
+                            safe_filename = url.replace("https://", "").replace("http://", "").replace("/", "_")
+                            analysis_filename = f"{safe_filename}_analysis.json"
+                            analysis_path = os.path.join(analysis_dir, analysis_filename)
+
+                            with open(analysis_path, 'w') as f:
+                                json.dump(analysis, f, indent=2)
+
+                            logger.info(f"Saved standard analysis to {analysis_path}")
+
+                            # Add analysis path to sitemap
+                            sitemap[url]["analysis_path"] = analysis_path
+                    except Exception as e:
+                        logger.error(f"Error processing {url} with vision: {str(e)}", exc_info=True)
+
+                # Save current state of sitemap after each batch for recovery
+                sitemap_path = os.path.join(output_dir, "sitemap.json")
+                with open(sitemap_path, 'w') as f:
+                    json.dump(sitemap, f, indent=2)
+        finally:
+            # Ensure we close the crawler
+            logger.info("Closing WebDriver")
+            try:
+                crawler.close()
+            except Exception as e:
+                logger.error(f"Error closing WebDriver: {str(e)}")
+
+    # Step 3: Generate tests for the entire site
+    logger.info("Step 3: Generating tests based on site analysis")
     tests = generate_site_tests(
         config,
         sitemap,
@@ -644,67 +861,6 @@ def site_e2e_process_with_sitemap(config, sitemap_file, framework='cucumber', la
 
     # Create the sitemap structure
     sitemap = {}
-    page_data_dir = os.path.join(output_dir, "page_data")
-    os.makedirs(page_data_dir, exist_ok=True)
-
-    # Initialize web crawler
-    crawler = WebCrawler(config)
-
-    try:
-        # Process URLs in batches to avoid memory issues
-        batch_size = 5
-        for i in range(0, len(urls), batch_size):
-            batch_urls = urls[i:i+batch_size]
-            logger.info(f"Crawling batch {i//batch_size + 1}/{(len(urls)+batch_size-1)//batch_size}, pages {i+1}-{min(i+batch_size, len(urls))}")
-
-            # Crawl each URL in the batch
-            for url in batch_urls:
-                try:
-                    # Extract page data
-                    logger.info(f"Crawling {url}")
-                    page_data = crawler.extract_page_data(url, with_screenshots=use_vision)
-
-                    # Save page data to file
-                    safe_filename = url.replace("https://", "").replace("http://", "").replace("/", "_")
-                    file_path = os.path.join(page_data_dir, f"{safe_filename}.json")
-                    with open(file_path, 'w', encoding='utf-8') as f:
-                        json.dump(page_data, f, indent=2)
-
-                    # Add to sitemap
-                    sitemap[url] = {
-                        "url": url,
-                        "title": page_data.get("title", "Unknown Page"),
-                        "file_path": file_path
-                    }
-
-                except Exception as e:
-                    logger.error(f"Error crawling {url}: {str(e)}")
-    finally:
-        # Clean up crawler
-        if crawler:
-            crawler.close()
-
-    # Save the sitemap
-    sitemap_path = os.path.join(output_dir, "sitemap.json")
-    with open(sitemap_path, 'w', encoding='utf-8') as f:
-        json.dump(sitemap, f, indent=2)
-
-    logger.info(f"Crawled and processed {len(sitemap)} URLs from sitemap")
-
-    # Generate tests for the sitemap
-    tests = generate_site_tests(
-        config,
-        sitemap,
-        framework,
-        language,
-        os.path.join(output_dir, "test_scripts"),
-        use_vision
-    )
-
-    logger.info(f"Sitemap-based E2E process complete. Generated tests for {len(tests)} pages.")
-    logger.info(f"Results saved to {output_dir}")
-
-    return tests
 
 def main():
     """Main entry point."""
@@ -712,106 +868,63 @@ def main():
         args = parse_arguments()
         config = Config()
 
+        # Show initial command being processed
+        logger.info(f"Executing command: {args.command} with arguments: {vars(args)}")
+
         if args.command == 'crawl':
-            logger.info(f"Crawl command with screenshots flag: {args.with_screenshots}")
-            output_path = crawl_page(config, args.url, args.output, with_screenshots=args.with_screenshots)
-            logger.info(f"Crawl completed: {output_path}")
+            output_file = crawl_page(config, args.url, args.output, args.with_screenshots)
+            logger.info(f"Crawl completed. Output saved to {output_file}")
 
         elif args.command == 'analyze':
-            if args.use_vision:
-                logger.info("Running analysis with vision capabilities")
-                # For vision analysis with existing page data, we need to ensure the screenshot exists
-                with open(args.input, 'r', encoding='utf-8') as f:
-                    page_data = json.load(f)
-                if "screenshot_path" not in page_data or not os.path.exists(page_data.get("screenshot_path", "")):
-                    logger.warning("Page data doesn't contain a valid screenshot path. Vision analysis may be limited.")
-
-                # Create an analyzer and use vision capabilities
-                analyzer = LLMAnalyzer(config)
-                analysis = analyzer.analyze_page_with_vision(page_data)
-
-                # Save the analysis
-                if args.output:
-                    output_filename = args.output
-                else:
-                    base_name = os.path.splitext(os.path.basename(args.input))[0]
-                    output_filename = f"{base_name}_vision_analysis.json"
-
-                output_path = os.path.join(config.analysis_path, output_filename)
-                with open(output_path, 'w', encoding='utf-8') as f:
-                    json.dump(analysis, indent=2, fp=f)
-
-                logger.info(f"Vision analysis saved to {output_path}")
-            else:
-                analyze_page_data(config, args.input, args.output)
-
-            if args.verbose and os.path.exists(os.path.join(config.analysis_path, args.output or "")):
-                # Display a summary of the analysis
-                analysis_path = os.path.join(config.analysis_path, args.output)
-                with open(analysis_path, 'r', encoding='utf-8') as f:
-                    analysis = json.load(f)
-
-                logger.info("=== Analysis Summary ===")
-                logger.info(f"URL: {analysis.get('url')}")
-                logger.info(f"Title: {analysis.get('title')}")
-                logger.info(f"Key Elements: {len(analysis.get('key_elements', []))}")
-                logger.info(f"Test Steps: {len(analysis.get('smoke_test_steps', []))}")
-                if analysis.get('smoke_test_steps'):
-                    for i, step in enumerate(analysis.get('smoke_test_steps', []), 1):
-                        logger.info(f"  Step {i}: {step}")
+            output_file = analyze_page_data(config, args.input, args.output)
+            logger.info(f"Analysis completed. Output saved to {output_file}")
 
         elif args.command == 'generate':
-            language = getattr(args, 'language', 'java')
-            success = generate_test_scripts(
-                config,
-                args.input,
-                framework=args.framework,
-                language=args.language,
-                output_dir=args.output,
-                use_vision=args.use_vision  # Pass the use_vision flag here
-            )
-            if not success:
-                sys.exit(1)
-            logger.info(f"Generated {args.framework} test scripts in {language}")
+            success = generate_test_scripts(config, args.input, args.framework, args.language, args.output, args.use_vision)
+            if success:
+                logger.info("Test script generation completed successfully.")
+            else:
+                logger.error("Test script generation failed.")
 
         elif args.command == 'e2e':
             if args.sitemap_file:
-                # Run E2E process using a pre-generated sitemap
-                site_e2e_process_with_sitemap(
+                output_files = site_e2e_process_with_sitemap(
                     config,
                     args.sitemap_file,
                     args.framework,
                     args.language,
                     args.output,
-                    False
+                    args.use_vision
                 )
             elif args.site and args.url:
-                site_e2e_process(
+                output_files = site_e2e_process(
                     config,
                     args.url,
                     args.max_pages,
                     args.framework,
                     args.language,
                     args.output,
-                    False
+                    args.use_vision
                 )
             elif args.url:
-                # Pass screenshots option from e2e to crawl
                 output_files = process_end_to_end(
                     config,
                     args.url,
                     args.framework,
                     args.output
                 )
-                logger.info("End-to-end process completed successfully")
-                logger.info("Output files:")
-                for file_type, file_path in output_files.items():
-                    logger.info(f"  {file_type}: {file_path}")
             else:
-                logger.error("Neither URL nor sitemap file was provided")
+                logger.error("URL or sitemap file must be provided for end-to-end process.")
                 return 1
 
+            logger.info(f"End-to-end process completed. Output files: {output_files}")
+
+        elif args.command == 'vision':
+            output_file = analyze_page_with_vision(config, args.url, args.output, args.with_flow, args.with_screenshots)
+            logger.info(f"Vision analysis completed. Output saved to {output_file}")
+
         elif args.command == 'vision-e2e':
+            logger.info(f"Starting vision-e2e with URL: {args.url}, site mode: {args.site}, max pages: {args.max_pages}")
             if args.sitemap_file:
                 # Run vision-enhanced E2E process using a pre-generated sitemap
                 site_e2e_process_with_sitemap(
@@ -823,17 +936,37 @@ def main():
                     True
                 )
             elif args.site and args.url:
-                site_e2e_process(
-                    config,
-                    args.url,
-                    args.max_pages,
-                    args.framework,
-                    args.language,
-                    args.output,
-                    True
-                )
+                logger.info("Processing entire site with vision analysis")
+                # Add timeout protection to prevent hanging
+                import signal
+
+                def timeout_handler(signum, frame):
+                    logger.error("Timeout occurred - process took too long")
+                    raise TimeoutError("Process took too long to complete")
+
+                # Set timeout to 20 minutes (adjust as needed)
+                signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(1200)  # 20 minutes in seconds
+
+                try:
+                    site_e2e_process(
+                        config,
+                        args.url,
+                        args.max_pages,
+                        args.framework,
+                        args.language,
+                        args.output,
+                        True
+                    )
+                    # Cancel alarm if successful
+                    signal.alarm(0)
+                except TimeoutError:
+                    logger.error("Site processing timed out - consider increasing the timeout or reducing max pages")
+                    return 1
+                except Exception as e:
+                    logger.error(f"Error in site_e2e_process: {str(e)}", exc_info=True)
+                    return 1
             elif args.url:
-                language = getattr(args, 'language', 'java')
                 output_files = vision_e2e_process(
                     config,
                     args.url,
@@ -841,16 +974,12 @@ def main():
                     args.output,
                     args.with_flow
                 )
-                logger.info(f"Vision-based end-to-end process completed successfully using {language}")
-                logger.info("Output files:")
-                for file_type, file_path in output_files.items():
-                    logger.info(f"  {file_type}: {file_path}")
+                logger.info(f"Vision end-to-end process completed. Output files: {output_files}")
             else:
-                logger.error("Neither URL nor sitemap file was provided")
+                logger.error("URL or sitemap file must be provided for vision end-to-end process.")
                 return 1
 
         elif args.command == 'sitemap':
-            # Process a pre-generated sitemap file
             prepared_sitemap = process_sitemap_file(
                 config,
                 args.file,
@@ -859,17 +988,15 @@ def main():
                 args.exclude,
                 args.output
             )
-            logger.info(f"Processed sitemap with {len(prepared_sitemap)} URLs")
+            logger.info(f"Sitemap processing completed. Prepared sitemap: {prepared_sitemap}")
 
         else:
-            logger.error("No command specified")
+            logger.error(f"Unknown command: {args.command}")
             return 1
 
-        return 0
-
     except Exception as e:
-        logger.error(f"Error: {str(e)}", exc_info=True)
+        logger.error(f"Error in main execution: {str(e)}", exc_info=True)
         return 1
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     sys.exit(main())

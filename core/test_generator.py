@@ -89,7 +89,29 @@ class TestGenerator:
 
                 # If this is pre-analyzed data, use it directly
                 if discovered_pages_data:
-                    page_analysis = page_data
+                    # Check if we already have analysis data embedded in the page data
+                    if "analysis" in page_data:
+                        logger.info(f"Using pre-generated analysis for {url}")
+                        page_analysis = page_data["analysis"]
+                    else:
+                        # Otherwise check for screenshot and do vision analysis if needed
+                        has_screenshot = "screenshot_path" in page_data and os.path.exists(page_data["screenshot_path"])
+
+                        if use_vision and has_screenshot:
+                            logger.info(f"Using vision-enhanced analysis for {url} with screenshot: {page_data['screenshot_path']}")
+                            try:
+                                # Use vision-based analysis
+                                page_analysis = self.llm_analyzer.analyze_page_with_vision(page_data)
+                                logger.info(f"Vision analysis completed successfully for {url}")
+                            except Exception as vision_err:
+                                logger.error(f"Vision analysis failed for {url}: {str(vision_err)}")
+                                logger.info(f"Falling back to standard analysis for {url}")
+                                page_analysis = self.llm_analyzer.analyze_page(page_data)
+                        else:
+                            if use_vision:
+                                logger.warning(f"Vision analysis requested but screenshot not available for {url}")
+                            logger.info(f"Using standard analysis for {url}")
+                            page_analysis = self.llm_analyzer.analyze_page(page_data)
                 else:
                     # Otherwise analyze page with LLM
                     if use_vision and "screenshot_path" in page_data and os.path.exists(page_data["screenshot_path"]):

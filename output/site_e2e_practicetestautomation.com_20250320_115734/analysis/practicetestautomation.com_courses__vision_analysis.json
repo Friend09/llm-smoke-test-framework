@@ -1,0 +1,56 @@
+{
+  "url": "https://practicetestautomation.com/courses/",
+  "title": "Courses | Practice Test Automation",
+  "page_title_validation": "Courses | Practice Test Automation",
+  "unique_identifiers": [
+    "Page title: Courses | Practice Test Automation",
+    "URL: https://practicetestautomation.com/courses/"
+  ],
+  "key_elements": [
+    "**Validate Email Input**: Click on the email input field and ensure it is editable and accepts valid email formats.",
+    "2. **Content Validation**: Confirm that the course title and description are displayed correctly and align with the given information.",
+    "**Email Input Field**: The input field with `id='form_email_8'` should be tested for proper input validation, placeholder text, and any error messages displayed for invalid inputs.",
+    "3. **Course Bundle Information**: Lists details about the included courses.",
+    "**Unique Elements**:",
+    "1. **Navigation Links**:",
+    "**Validate First Name Input**: Click on the first name input field and ensure it is editable and accepts text input.",
+    "**Test Navigation Toggle**: Click the navigation toggle button and verify that the navigation menu appears/disappears correctly.",
+    "**Validate Input Field Limits**: Test the maximum character limits (if applicable) for both input fields.",
+    "1. **Header Section**: Contains the website title and navigation links (Home, Practice, Courses, Blog, Contact).",
+    "1. **Check Navigation Links**: Verify that all navigation links in the header direct to the appropriate sections/pages.",
+    "**First Name Input Field**: The input field with `id='form_first_name_8'` should be tested for its functionality, validation, and placeholder text (if applicable).",
+    "1. **Header Navigation Links**:",
+    "- Not interactive but provides important information about the course offering.",
+    "**Navigation Toggle Button**: The button with `id='toggle-navigation'` should be tested for visibility, functionality, and responsiveness.",
+    "**Check Input Field Placeholders**: Confirm any placeholder text is displayed correctly in both input fields (if applicable).",
+    "**Test Form Submission**: Attempt to submit the form (if a submission button is present) and ensure the page responds appropriately.",
+    "- These links allow users to navigate to different sections of the website."
+  ],
+  "smoke_test_steps": [
+    "**Navigation Toggle Button**: The button with `id='toggle-navigation'` should be tested for visibility, functionality, and responsiveness.",
+    "**First Name Input Field**: The input field with `id='form_first_name_8'` should be tested for its functionality, validation, and placeholder text (if applicable).",
+    "**Email Input Field**: The input field with `id='form_email_8'` should be tested for proper input validation, placeholder text, and any error messages displayed for invalid inputs.",
+    "**Page Title**: \"Courses | Practice Test Automation\"",
+    "**Page URL**: `https://practicetestautomation.com/courses/`",
+    "### 3. RECOMMENDED SMOKE TEST STEPS:",
+    "**Verify Page Load**: Ensure the webpage loads successfully without errors.",
+    "**Check Page Title**: Confirm that the page title is \"Courses | Practice Test Automation\".",
+    "**Test Navigation Toggle**: Click the navigation toggle button and verify that the navigation menu appears/disappears correctly.",
+    "**Validate First Name Input**: Click on the first name input field and ensure it is editable and accepts text input."
+  ],
+  "locator_strategies": {
+    "toggle-navigation": "By ID: #toggle-navigation",
+    "data[form_field_OTlkMTBlNjFjOGUwX2ZpcnN0X25hbWU=]": "By ID: #form_first_name_8",
+    "data[form_field_ODhhN2IwZjQ3NTMzX2VtYWls]": "By ID: #form_email_8"
+  },
+  "page_sections": [
+    "### VISUAL_SECTIONS",
+    "1. **Header Section**: Contains the website title and navigation links (Home, Practice, Courses, Blog, Contact).",
+    "2. **Main Content Area**: Features the course title and description.",
+    "4. **Image Section**: Displays an illustration relevant to the course.",
+    "- These links allow users to navigate to different sections of the website.",
+    "1. **Check Navigation Links**: Verify that all navigation links in the header direct to the appropriate sections/pages.",
+    "4. **Responsive Design Test**: Check how the layout adapts on different screen sizes (e.g., mobile, tablet)."
+  ],
+  "vision_analysis": "Here\u2019s the analysis based on the provided webpage screenshot:\n\n### VISUAL_SECTIONS\n1. **Header Section**: Contains the website title and navigation links (Home, Practice, Courses, Blog, Contact).\n2. **Main Content Area**: Features the course title and description.\n3. **Course Bundle Information**: Lists details about the included courses.\n4. **Image Section**: Displays an illustration relevant to the course.\n\n### INTERACTIVE_ELEMENTS\n1. **Navigation Links**: \n   - **Home**\n   - **Practice**\n   - **Courses**\n   - **Blog**\n   - **Contact**\n   - These links allow users to navigate to different sections of the website.\n   \n2. **Course Title and Description**: \n   - Not interactive but provides important information about the course offering.\n\n### TEST_SCENARIOS\n1. **Check Navigation Links**: Verify that all navigation links in the header direct to the appropriate sections/pages.\n2. **Content Validation**: Confirm that the course title and description are displayed correctly and align with the given information.\n3. **Image Load Test**: Ensure the course-related image loads properly and is displayed without issues.\n4. **Responsive Design Test**: Check how the layout adapts on different screen sizes (e.g., mobile, tablet).\n5. **SEO Check**: Analyze whether the page contains appropriate meta tags and descriptions.\n\n### ELEMENT_LOCATORS\n1. **Header Navigation Links**: \n   - Locator Strategy"
+}

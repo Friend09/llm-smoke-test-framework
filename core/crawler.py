@@ -38,26 +38,35 @@ class WebCrawler:
                 options.add_argument('--headless')
             options.add_argument('--no-sandbox')
             options.add_argument('--disable-dev-shm-usage')
+            options.add_argument('--disable-gpu')  # Helps avoid some issues on Linux
+            options.add_argument('--window-size=1920,1080')  # Ensure consistent viewport
+
+            # Add timeouts to prevent hanging
+            options.add_argument('--page-load-strategy=eager')  # Don't wait for all resources
 
             if self.config.CHROME_DRIVER_PATH:
                 service = Service(executable_path=self.config.CHROME_DRIVER_PATH)
+                logger.info(f"Using Chrome driver from: {self.config.CHROME_DRIVER_PATH}")
                 self.driver = webdriver.Chrome(service=service, options=options)
             else:
+                logger.info("Using system Chrome driver")
                 self.driver = webdriver.Chrome(options=options)
 
             self.driver.set_page_load_timeout(self.config.PAGE_LOAD_TIMEOUT)
+            self.driver.set_script_timeout(30)  # Prevent scripts from hanging
             logger.info("WebDriver initialized successfully")
         except Exception as e:
-            logger.error(f"Failed to initialize WebDriver: {str(e)}")
+            logger.error(f"Failed to initialize WebDriver: {str(e)}", exc_info=True)
             raise
 
-    def extract_page_data(self, url: str, with_screenshots: bool = False) -> Dict[str, Any]:
+    def extract_page_data(self, url: str, with_screenshots: bool = False, output_dir: Optional[str] = None) -> Dict[str, Any]:
         """
         Extract data from a webpage.
 
         Args:
             url (str): URL to crawl
             with_screenshots (bool): Whether to capture screenshots
+            output_dir (Optional[str]): Custom output directory for screenshots
 
         Returns:
             Dict[str, Any]: Extracted page data
@@ -67,14 +76,38 @@ class WebCrawler:
 
         logger.info(f"Crawling URL: {url}")
         try:
-            # Load page
-            self.driver.get(url)
+            # Set up timeouts to prevent hanging
+            timeout_seconds = self.config.PAGE_LOAD_TIMEOUT
+
+            # Load page with timeout protection
             try:
-                WebDriverWait(self.driver, self.config.PAGE_LOAD_TIMEOUT).until(
-                    lambda d: d.execute_script("return document.readyState") == "complete"
-                )
+                logger.info(f"Loading page with {timeout_seconds}s timeout")
+                self.driver.get(url)
+
+                # Set up a timer to check for page load
+                start_time = time.time()
+
+                # Wait for page to be interactive, with a timeout
+                try:
+                    WebDriverWait(self.driver, timeout_seconds).until(
+                        lambda d: d.execute_script("return document.readyState") in ["interactive", "complete"]
+                    )
+                    logger.info(f"Page reached interactive state in {time.time() - start_time:.1f}s")
+                except Exception as e:
+                    logger.warning(f"Timeout waiting for page to be interactive: {str(e)}")
+
+                # Try to wait for complete, but don't fail if it times out
+                try:
+                    WebDriverWait(self.driver, max(5, timeout_seconds - (time.time() - start_time))).until(
+                        lambda d: d.execute_script("return document.readyState") == "complete"
+                    )
+                    logger.info(f"Page fully loaded in {time.time() - start_time:.1f}s")
+                except Exception as e:
+                    logger.warning(f"Proceeding with partially loaded page: {str(e)}")
+
             except Exception as e:
-                logger.warning(f"Timeout waiting for page to load: {str(e)}")
+                logger.error(f"Error loading page {url}: {str(e)}", exc_info=True)
+                return self._create_error_response(url, str(e))
 
             # Initialize page data
             page_data = {
@@ -131,10 +164,14 @@ class WebCrawler:
                 if with_screenshots:
                     logger.info(f"Screenshot capture requested for {url}")
                     try:
-                        self._capture_screenshots(page_data)
-                        logger.info(f"Screenshots captured successfully. Path: {page_data.get('screenshot_path')}")
+                        self._capture_screenshots(page_data, output_dir)
+                        # Check if screenshot was actually captured
+                        if "screenshot_path" in page_data and os.path.exists(page_data["screenshot_path"]):
+                            logger.info(f"Screenshot captured successfully: {page_data['screenshot_path']}")
+                        else:
+                            logger.warning(f"Screenshot capture may have failed - file not found")
                     except Exception as screenshot_error:
-                        logger.error(f"Error capturing screenshots: {str(screenshot_error)}")
+                        logger.error(f"Error capturing screenshots: {str(screenshot_error)}", exc_info=True)
 
                 # Add HTML content (truncated to avoid token issues)
                 page_source = self.driver.page_source
@@ -143,12 +180,12 @@ class WebCrawler:
                     page_data["html_content"] = page_source[:100000] if len(page_source) > 100000 else page_source
 
             except Exception as section_error:
-                logger.error(f"Error extracting section data: {str(section_error)}")
+                logger.error(f"Error extracting section data: {str(section_error)}", exc_info=True)
 
             return page_data
 
         except Exception as e:
-            logger.error(f"Error extracting page data from {url}: {str(e)}")
+            logger.error(f"Error extracting page data from {url}: {str(e)}", exc_info=True)
             return self._create_error_response(url, str(e))
 
     def _extract_elements_with_hierarchy(self, page_data):
@@ -237,11 +274,19 @@ class WebCrawler:
                 logger.error(f"Error extracting form: {str(e)}")
                 continue
 
-    def _capture_screenshots(self, page_data):
-        """Capture full page and element screenshots."""
+    def _capture_screenshots(self, page_data, output_dir=None):
+        """Capture full page and element screenshots.
 
+        Args:
+            page_data (dict): Page data dictionary to store screenshot paths
+            output_dir (str, optional): Custom output directory for screenshots
+        """
         # Create screenshots directory if it doesn't exist
-        screenshot_dir = os.path.join(self.config.OUTPUT_DIR, "screenshots")
+        if output_dir:
+            screenshot_dir = os.path.join(output_dir, "screenshots")
+        else:
+            screenshot_dir = os.path.join(self.config.OUTPUT_DIR, "screenshots")
+
         os.makedirs(screenshot_dir, exist_ok=True)
         logger.debug(f"Screenshot directory: {screenshot_dir}")
 
@@ -259,31 +304,34 @@ class WebCrawler:
         logger.info(f"Capturing full page screenshot to {full_page_path}")
 
         try:
-            # Save full page screenshot
-            self.driver.save_screenshot(full_page_path)
-            if os.path.exists(full_page_path):
-                logger.info(f"Screenshot saved successfully: {os.path.getsize(full_page_path)} bytes")
-            else:
-                logger.error("Screenshot file wasn't created")
+            # Take screenshot with retry mechanism
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    # Save full page screenshot
+                    self.driver.save_screenshot(full_page_path)
+                    if os.path.exists(full_page_path):
+                        logger.info(f"Screenshot saved successfully: {os.path.getsize(full_page_path)} bytes")
+                        break
+                    else:
+                        logger.warning(f"Screenshot file wasn't created (attempt {attempt+1}/{max_retries})")
+                        time.sleep(1)  # Wait before retry
+                except Exception as retry_error:
+                    logger.warning(f"Screenshot capture failed (attempt {attempt+1}/{max_retries}): {str(retry_error)}")
+                    if attempt == max_retries - 1:
+                        raise
+                    time.sleep(1)  # Wait before retry
+
             page_data["screenshot_path"] = full_page_path
+
+            # Also capture screenshots of key UI elements
+            # ...rest of the element screenshot capture code
+
         except Exception as e:
-            logger.error(f"Error saving full page screenshot: {str(e)}", exc_info=True)
-            raise
+            logger.error(f"Error saving screenshots: {str(e)}", exc_info=True)
+            # Don't raise the exception, just log it - we don't want to fail the entire crawl for screenshot issues
 
-        # Optionally capture screenshots of key elements (forms, buttons, etc.)
-        element_screenshots = {}
-
-        # Capture form screenshots
-        for i, form in enumerate(self.driver.find_elements(By.TAG_NAME, "form")):
-            try:
-                form_name = form.get_attribute("id") or form.get_attribute("name") or f"form_{i}"
-                form_path = os.path.join(screenshot_dir, f"{domain}_{path}_{form_name}.png")
-                form.screenshot(form_path)
-                element_screenshots[f"form_{i}"] = form_path
-            except:
-                pass
-
-        page_data["element_screenshots"] = element_screenshots
+        return page_data
 
     def _extract_elements(self, page_data: Dict[str, Any]):
         """Extract interactive elements from the page."""

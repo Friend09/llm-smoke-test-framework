@@ -34,6 +34,9 @@ class Config:
     SCREENSHOT_MAX_DIMENSION: int = 1280  # Maximum dimension in pixels
     SCREENSHOT_QUALITY: int = 75  # JPEG quality (1-100)
 
+    # Add a parameter to organize files by site
+    ORGANIZE_BY_SITE: bool = os.getenv("ORGANIZE_BY_SITE", "True").lower() == "true"
+
     def __post_init__(self):
         """Load configuration from environment variables."""
         # Load from environment variables

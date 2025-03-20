@@ -547,6 +547,7 @@ class LLMAnalyzer:
         except Exception as e:
             logger.error(f"Error analyzing screenshot with vision: {str(e)}", exc_info=True)
             return {}
+
     def _extract_test_scenarios_from_response(self, response: str) -> list:
         """Extract test scenarios from the formatted response."""
         try:
