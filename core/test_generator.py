@@ -6,6 +6,7 @@ import json
 import logging
 from config.config import Config
 from core.llm_analyzer import LLMAnalyzer
+from core.utils.path_utils import ensure_directory_exists, normalize_path
 
 logger = logging.getLogger(__name__)
 
@@ -678,3 +679,22 @@ public class BaseTest {
         finally:
             if crawler and crawler != web_crawler:
                 crawler.close()
+
+    def save_test_files(self, url, tests, output_dir):
+        try:
+            # Create a safe filename from the URL
+            safe_filename = self._create_safe_filename(url)
+
+            # Normalize and ensure the output path exists
+            file_path = normalize_path(os.path.join(output_dir, f"{safe_filename}_spec.feature"))
+            ensure_directory_exists(file_path)
+
+            # Write the file
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(tests)
+
+            self.logger.info(f"Test files saved for {url}")
+            return file_path
+        except Exception as e:
+            self.logger.error(f"Error saving test files for {url}: {str(e)}")
+            return None

@@ -1,0 +1,53 @@
+{
+  "url": "https://practicetestautomation.com/courses/",
+  "title": "Courses | Practice Test Automation",
+  "page_title_validation": "Courses | Practice Test Automation",
+  "unique_identifiers": [
+    "Page title: Courses | Practice Test Automation",
+    "URL: https://practicetestautomation.com/courses/"
+  ],
+  "key_elements": [
+    "**Check First Name Input Field**: Ensure the first name input field is present and can accept text input.",
+    "3. **Descriptive Text**: Provides information about the course, also not interactive but crucial for user engagement.",
+    "**Check for Accessibility**: Ensure that all interactive elements are accessible via keyboard navigation (tab functionality).",
+    "**Toggle Navigation Button**: `button id='toggle-navigation'`",
+    "**Email Input Field**: `input id='form_email_8'`",
+    "**Empty Field Validation**: Attempt to submit the form with empty fields and verify that appropriate validation messages appear (if applicable).",
+    "1. **Header**: Includes the website title and navigation links (Home, Practice, Courses, Blog, Contact).",
+    "**Test Input Validation**: Enter invalid data into the email field and verify that appropriate validation messages appear (if applicable).",
+    "**Unique Element IDs**:",
+    "- These links allow users to navigate to different sections of the website.",
+    "**Check Email Input Field**: Ensure the email input field is present and can accept valid email formats.",
+    "1. **Navigation Links**:",
+    "1. **Navigation Testing**: Verify that all navigation links in the header direct to the correct pages without errors.",
+    "2. **Content Display**: Ensure that the course title and description are correctly displayed and formatted.",
+    "4. **Images**: Visual representation related to the course; they may be clickable if linked to other content or details.",
+    "**First Name Input Field**: `input id='form_first_name_8'`",
+    "**Test Navigation Button**: Click the \"Toggle Navigation\" button and verify the navigation menu appears/disappears as expected."
+  ],
+  "smoke_test_steps": [
+    "Based on the provided webpage details and elements, here is the structured smoke test information:",
+    "**Page Title**: \"Courses | Practice Test Automation\"",
+    "**Page URL**: `https://practicetestautomation.com/courses/`",
+    "### 3. RECOMMENDED SMOKE TEST STEPS:",
+    "**Verify Page Load**: Ensure the page loads without errors and displays the correct title.",
+    "**Test Navigation Button**: Click the \"Toggle Navigation\" button and verify the navigation menu appears/disappears as expected.",
+    "**Check First Name Input Field**: Ensure the first name input field is present and can accept text input.",
+    "**Check Email Input Field**: Ensure the email input field is present and can accept valid email formats.",
+    "**Test Input Validation**: Enter invalid data into the email field and verify that appropriate validation messages appear (if applicable).",
+    "**Empty Field Validation**: Attempt to submit the form with empty fields and verify that appropriate validation messages appear (if applicable)."
+  ],
+  "locator_strategies": {
+    "toggle-navigation": "By ID: #toggle-navigation",
+    "data[form_field_OTlkMTBlNjFjOGUwX2ZpcnN0X25hbWU=]": "By ID: #form_first_name_8",
+    "data[form_field_ODhhN2IwZjQ3NTMzX2VtYWls]": "By ID: #form_email_8"
+  },
+  "page_sections": [
+    "### VISUAL_SECTIONS",
+    "2. **Main Content Area**: Displays the course title, description, and featured image.",
+    "3. **Course Details Section**: Lists the contents of the subscription bundle with brief descriptions.",
+    "- These links allow users to navigate to different sections of the website.",
+    "4. **Visual Consistency**: Confirm that the layout and styling of all elements are consistent with the overall site theme."
+  ],
+  "vision_analysis": "Sure! Here\u2019s the analysis based on the provided webpage screenshot:\n\n### VISUAL_SECTIONS\n1. **Header**: Includes the website title and navigation links (Home, Practice, Courses, Blog, Contact).\n2. **Main Content Area**: Displays the course title, description, and featured image.\n3. **Course Details Section**: Lists the contents of the subscription bundle with brief descriptions.\n\n### INTERACTIVE_ELEMENTS\n1. **Navigation Links**: \n   - Home\n   - Practice\n   - Courses\n   - Blog\n   - Contact\n   - These links allow users to navigate to different sections of the website.\n  \n2. **Course Title**: Acts as a heading, though not necessarily interactive, it indicates the main focus of this page.\n3. **Descriptive Text**: Provides information about the course, also not interactive but crucial for user engagement.\n4. **Images**: Visual representation related to the course; they may be clickable if linked to other content or details.\n\n### TEST_SCENARIOS\n1. **Navigation Testing**: Verify that all navigation links in the header direct to the correct pages without errors.\n2. **Content Display**: Ensure that the course title and description are correctly displayed and formatted.\n3. **Image Presence Check**: Verify that the course image loads correctly and is not broken or missing.\n4. **Visual Consistency**: Confirm that the layout and styling of all elements are consistent with the overall site theme.\n"
+}

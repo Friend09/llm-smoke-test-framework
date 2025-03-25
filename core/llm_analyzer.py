@@ -1292,3 +1292,33 @@ class LLMAnalyzer:
             format_instructions=format_instructions,
             user_flow=user_flow_str,
         )
+
+    def parse_json_safely(self, json_str):
+        """
+        Parse JSON with error handling and some basic recovery attempts.
+        """
+        try:
+            # First try standard parsing
+            return json.loads(json_str)
+        except json.JSONDecodeError as e:
+            self.logger.warning(f"Initial JSON parsing failed: {str(e)}")
+
+            # Try to fix common issues
+            try:
+                # 1. Fix missing commas between objects in arrays
+                fixed_json = re.sub(r'}\s*{', '},{', json_str)
+
+                # 2. Fix trailing commas in arrays and objects
+                fixed_json = re.sub(r',\s*}', '}', fixed_json)
+                fixed_json = re.sub(r',\s*]', ']', fixed_json)
+
+                return json.loads(fixed_json)
+            except json.JSONDecodeError as e2:
+                self.logger.error(f"JSON parsing error: {str(e2)}")
+                # Provide more context about the error location
+                if hasattr(e2, 'lineno') and hasattr(e2, 'colno'):
+                    line = json_str.split('\n')[e2.lineno-1] if e2.lineno > 0 and e2.lineno <= len(json_str.split('\n')) else ""
+                    context = f"Error near: {line}"
+                    self.logger.error(f"JSON context: {context}")
+
+                raise

@@ -1,0 +1,72 @@
+{
+  "url": "https://practicetestautomation.com/contact/",
+  "title": "Contact | Practice Test Automation | Selenium WebDriver",
+  "page_title_validation": "Contact | Practice Test Automation | Selenium WebDriver",
+  "unique_identifiers": [
+    "Page title: Contact | Practice Test Automation | Selenium WebDriver",
+    "URL: https://practicetestautomation.com/contact/"
+  ],
+  "key_elements": [
+    "1. **Empty Form Submission**: Submit the form without filling any fields and verify the validation messages.",
+    "**Submit Button**: `button id='wpforms-submit-161'` (for form submission)",
+    "**Click Submit Button**: Click the submit button and check for any confirmation message or redirection.",
+    "**Locate Submit Button**: Ensure the submit button with ID `wpforms-submit-161` is present and clickable.",
+    "1. **Name Input Fields**:",
+    "**Check Navigation Toggle**: Ensure the navigation toggle button with ID `toggle-navigation` is present and clickable.",
+    "3. **Invalid Email Format**: Input an invalid email format and submit, checking for appropriate error message.",
+    "3. **Form Section**: Contains input fields for user's name, email, and message.",
+    "**Input Data**: Enter valid data into the text input field to ensure it accepts input.",
+    "2. **Valid Input Submission**: Fill in all fields with valid data and submit the form; check for successful submission acknowledgment.",
+    "2. **Main Content Area**: Includes the contact header, description, and form fields.",
+    "- **Name**: Two input boxes for first and last names.",
+    "1. **Input Fields**:",
+    "**Unique Button IDs**: `wpforms-submit-161`, `toggle-navigation` (both can be used to identify specific actions on the page)",
+    "**Form ID**: `wpforms-form-161` (can be used to identify the specific form)",
+    "**Navigation Toggle Button**: `button id='toggle-navigation'` (for toggling site navigation)",
+    "**Locate Text Input Field**: Verify that the text input field with ID `wpforms-161-field_0` is present and visible.",
+    "**Text Input Field**: `input id='wpforms-161-field_0'` (for entering user information in the form)",
+    "- **Email**: A single input box for the user's email.",
+    "5. **Navigation Links**: Click each navigation link in the header to verify they lead to the correct pages.",
+    "2. **Submit Button**: Typically found at the bottom of the form (not shown, but assumed to exist).",
+    "1. **Header**: Contains logo and navigation links (Home, Practice, Courses, Blog, Contact)."
+  ],
+  "smoke_test_steps": [
+    "1. **Empty Form Submission**: Submit the form without filling any fields",
+    "verify the validation messages.",
+    "2. **Valid Input Submission**: Fill in all fields with valid data",
+    "submit the form; check for successful submission acknowledgment.",
+    "3. **Invalid Email Format**: Input an invalid email format",
+    "submit, checking for appropriate error message.",
+    "4. **Field Length Validation**: Test the maximum character limit of the \"Comment or Message\" field.",
+    "5. **Navigation Links**: Click each navigation link in the header to verify they lead to the correct pages.",
+    "###",
+    "**Text Input Field**: `input id='wpforms-161-field_0'` (for entering user information in the form)",
+    "**Page Title**: \"Contact | Practice Test Automation | Selenium WebDriver\"",
+    "**Page URL**: `https://practicetestautomation.com/contact/`",
+    "**Verify Page Title**: Ensure the page title matches \"Contact | Practice Test Automation | Selenium WebDriver\".",
+    "**Check Page URL**: Validate that the URL is `https://practicetestautomation.com/contact/`.",
+    "**Locate Text Input Field**: Verify that the text input field with ID `wpforms-161-field_0` is present and visible.",
+    "**Input Data**: Enter valid data into the text input field to ensure it accepts input.",
+    "**Locate Submit Button**: Ensure the submit button with ID `wpforms-submit-161` is present and clickable."
+  ],
+  "locator_strategies": {
+    "Submit": "By ID: #wpforms-submit-161",
+    "toggle-navigation": "By ID: #toggle-navigation",
+    "wpforms[fields][0][first]": "By ID: #wpforms-161-field_0"
+  },
+  "page_sections": [
+    "### VISUAL_SECTIONS:",
+    "2. **Main Content Area**: Includes the contact header, description, and form fields.",
+    "3. **Form Section**: Contains input fields for user's name, email, and message.",
+    "- **Comment or Message**: A larger textarea for user messages."
+  ],
+  "test_scenarios": [
+    "1. **Empty Form Submission**: Submit the form without filling any fields and verify the validation messages.",
+    "2. **Valid Input Submission**: Fill in all fields with valid data and submit the form; check for successful submission acknowledgment.",
+    "3. **Invalid Email Format**: Input an invalid email format and submit, checking for appropriate error message.",
+    "4. **Field Length Validation**: Test the maximum character limit of the \"Comment or Message\" field.",
+    "5. **Navigation Links**: Click each navigation link in the header to verify they lead to the correct pages.",
+    "###"
+  ],
+  "vision_analysis": "### VISUAL_SECTIONS:\n1. **Header**: Contains logo and navigation links (Home, Practice, Courses, Blog, Contact).\n2. **Main Content Area**: Includes the contact header, description, and form fields.\n3. **Form Section**: Contains input fields for user's name, email, and message.\n4. **Footer**: Not visible in the screenshot, but typically follows the main content.\n\n### INTERACTIVE_ELEMENTS:\n1. **Input Fields**:\n   - **Name**: Two input boxes for first and last names.\n   - **Email**: A single input box for the user's email.\n   - **Comment or Message**: A larger textarea for user messages.\n  \n2. **Submit Button**: Typically found at the bottom of the form (not shown, but assumed to exist).\n\n### TEST_SCENARIOS:\n1. **Empty Form Submission**: Submit the form without filling any fields and verify the validation messages.\n2. **Valid Input Submission**: Fill in all fields with valid data and submit the form; check for successful submission acknowledgment.\n3. **Invalid Email Format**: Input an invalid email format and submit, checking for appropriate error message.\n4. **Field Length Validation**: Test the maximum character limit of the \"Comment or Message\" field.\n5. **Navigation Links**: Click each navigation link in the header to verify they lead to the correct pages.\n\n### ELEMENT_LOCATORS:\n1. **Name Input Fields**:\n"
+}
