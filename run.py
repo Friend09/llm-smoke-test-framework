@@ -199,19 +199,27 @@ def generate_test_scripts(config: Config, analysis_file: str, framework: str = '
                 # This adapts a standard analysis for vision processing
                 analysis_data["vision_analysis"] = True
 
-        # Generate tests with the updated analysis - Fix the parameter name here
+        # Generate tests with the updated analysis
         generated_tests = test_gen.generate_tests(
             discovered_pages_data={url: analysis_data},
             output_dir=output_dir,
             framework=framework,
-            language=language  # Changed from programming_language to language
+            language=language
         )
 
         logger.info(f"Generated {len(generated_tests)} test files")
-        return True
+
+        # Return a dictionary with the test files
+        output_files = {}
+        for test_url, test_script in generated_tests.items():
+            safe_url = test_gen._safe_filename(test_url)
+            test_file = os.path.join(output_dir or config.test_scripts_path, f"{safe_url}_spec.feature")
+            output_files[f"test_{safe_url}"] = test_file
+
+        return output_files
     except Exception as e:
         logger.error(f"Error generating test scripts: {str(e)}", exc_info=True)
-        return False
+        return {"error": str(e)}
 
 def process_end_to_end(
     config: Config,
@@ -907,11 +915,11 @@ def main():
             logger.info(f"Analysis completed. Output saved to {output_file}")
 
         elif args.command == 'generate':
-            success = generate_test_scripts(config, args.input, args.framework, args.language, args.output, args.use_vision)
-            if success:
-                logger.info("Test script generation completed successfully.")
-            else:
+            output_files = generate_test_scripts(config, args.input, args.framework, args.language, args.output, args.use_vision)
+            if output_files.get("error"):
                 logger.error("Test script generation failed.")
+            else:
+                logger.info("Test script generation completed successfully.")
 
         elif args.command == 'e2e':
             if args.sitemap_file:

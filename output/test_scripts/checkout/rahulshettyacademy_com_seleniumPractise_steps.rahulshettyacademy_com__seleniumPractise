@@ -1,0 +1,55 @@
+
+import io.cucumber.java.en.Given;
+import io.cucumber.java.en.Then;
+import io.cucumber.java.en.When;
+import org.junit.Assert;
+
+public class GreenKartSteps {
+    GreenKartPage greenKartPage = new GreenKartPage();
+
+    @Given("user opens URL {string}")
+    public void userOpensURL(String url) {
+        greenKartPage.openPage(url);
+    }
+
+    @Then("user verifies the page title is {string}")
+    public void userVerifiesPageTitle(String expectedTitle) {
+        String actualTitle = greenKartPage.getPageTitle();
+        Assert.assertEquals(expectedTitle, actualTitle);
+    }
+
+    @When("user enters {string} in the search bar")
+    public void userEntersInTheSearchBar(String searchTerm) {
+        greenKartPage.enterSearchTerm(searchTerm);
+    }
+
+    @When("user clicks on the search button")
+    public void userClicksOnTheSearchButton() {
+        greenKartPage.clickSearchButton();
+    }
+
+    @Then("user verifies that search results are displayed")
+    public void userVerifiesSearchResultsDisplayed() {
+        Assert.assertTrue(greenKartPage.isSearchResultsDisplayed());
+    }
+
+    @When("user clicks on the Add to Cart button for a product")
+    public void userClicksOnAddToCartButton() {
+        greenKartPage.clickAddToCartButton();
+    }
+
+    @Then("user verifies that the cart icon updates to reflect the number of items added")
+    public void userVerifiesCartIconUpdates() {
+        Assert.assertTrue(greenKartPage.isCartIconUpdated());
+    }
+
+    @When("user clicks on the Checkout button")
+    public void userClicksOnCheckoutButton() {
+        greenKartPage.clickCheckoutButton();
+    }
+
+    @Then("user verifies that the checkout page is displayed")
+    public void userVerifiesCheckoutPageDisplayed() {
+        Assert.assertTrue(greenKartPage.isCheckoutPageDisplayed());
+    }
+}

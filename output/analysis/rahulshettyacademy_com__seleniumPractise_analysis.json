@@ -1,0 +1,38 @@
+{
+  "url": "https://rahulshettyacademy.com/seleniumPractise",
+  "title": "GreenKart - veg and fruits kart",
+  "page_title_validation": "GreenKart - veg and fruits kart",
+  "unique_identifiers": [
+    "Page title: GreenKart - veg and fruits kart",
+    "URL: https://rahulshettyacademy.com/seleniumPractise"
+  ],
+  "key_elements": [
+    "**Checkout Buttons**:",
+    "**Search Input Field**:",
+    "**Add to Cart Buttons**:",
+    "**Unique Elements**:",
+    "**Check for Search Input Field**: Validate that the search input field is present and functional.",
+    "**Add Items to Cart**: Click on several \"ADD TO CART\" buttons and verify that items are added to the cart.",
+    "**Check Checkout Button Functionality**: Click on `checkoutModalBtnOne` and `checkoutModalBtnTwo` and check for expected behavior (modal popup or redirection).",
+    "**Confirm Form Method**: Ensure the form method is set to 'get'.",
+    "**Check for Accessibility**: Ensure that key elements are accessible using keyboard navigation.",
+    "**Responsive Design Check**: Resize the browser window to ensure the layout is responsive and elements are displayed correctly."
+  ],
+  "smoke_test_steps": [
+    "Here\u2019s the information you need to generate smoke test information for the specified webpage:",
+    "**Checkout Buttons**:",
+    "`checkoutModalBtnOne`",
+    "`checkoutModalBtnTwo`",
+    "IDs of checkout buttons: `checkoutModalBtnOne` and `checkoutModalBtnTwo`",
+    "### 3. RECOMMENDED SMOKE TEST STEPS:",
+    "**Verify Page Title**: Ensure the page title is \"GreenKart - veg and fruits kart\".",
+    "**Verify URL**: Confirm the URL is `https://rahulshettyacademy.com/seleniumPractise`.",
+    "**Check for Search Input Field**: Validate that the search input field is present and functional.",
+    "**Add Items to Cart**: Click on several \"ADD TO CART\" buttons and verify that items are added to the cart."
+  ],
+  "locator_strategies": {
+    "checkoutModalBtnOne": "By ID: #checkoutModalBtnOne",
+    "checkoutModalBtnTwo": "By ID: #checkoutModalBtnTwo",
+    "react-select-2-input": "By ID: #react-select-2-input"
+  }
+}
