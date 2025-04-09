@@ -240,7 +240,7 @@ class LLMAnalyzer:
             elements_section = self._extract_section(response_content, "Key elements", ["Unique identifiers", "Recommended smoke", "Suggested locator"])
             for line in elements_section.split("\n"):
                 if line.strip().startswith("-") or line.strip().startswith("*"):
-                    elements.append(line.strip()[2:].strip())
+                    key_elements.append(line.strip()[2:].strip())
 
         # Fallback to heuristic extraction based on content if section headers aren't found
         if not key_elements:
