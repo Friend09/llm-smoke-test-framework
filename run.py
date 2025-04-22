@@ -218,7 +218,7 @@ def generate_test_scripts(config: Config, analysis_file: str, framework: str = '
 
         return output_files
     except Exception as e:
-        logger.error(f"Error generating test scripts: {str(e)}", exc_info=True)
+        logger.error(f"Error generating test scripts: {str(e)}")
         return {"error": str(e)}
 
 def process_end_to_end(

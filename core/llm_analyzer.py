@@ -960,59 +960,7 @@ class LLMAnalyzer:
                     logger.debug(f"Response content: {response.content}")
 
                     # Fall back to simple extraction of code blocks
-                    content = response.content
-                    feature_file = ""
-                    step_definitions = ""
-                    page_object = ""
-
-                    # Try to extract code blocks with regex
-                    import re
-
-                    # Look for feature file (Gherkin syntax)
-                    feature_match = re.search(r"```gherkin\n(.*?)```", content, re.DOTALL)
-                    if feature_match:
-                        feature_file = feature_match.group(1)
-                    else:
-                        feature_match = re.search(r"```feature\n(.*?)```", content, re.DOTALL)
-                        if feature_match:
-                            feature_file = feature_match.group(1)
-                        else:
-                            # Look for content that looks like a feature file
-                            for line in content.split("\n"):
-                                if line.startswith("Feature:") or line.startswith("Scenario:"):
-                                    # Extract the whole block
-                                    start_idx = content.find(line)
-                                    feature_block = content[start_idx:]
-                                    end_idx = feature_block.find("```")
-                                    if end_idx > 0:
-                                        feature_file = feature_block[:end_idx].strip()
-                                    else:
-                                        feature_file = line
-                                    break
-
-                    # Look for Java code blocks
-                    java_blocks = re.findall(r"```java\n(.*?)```", content, re.DOTALL)
-
-                    # If we found Java blocks, try to determine which is which
-                    if len(java_blocks) >= 2:
-                        for block in java_blocks:
-                            if "class" in block and ("Page" in block or "PO" in block):
-                                page_object = block
-                            elif "Given" in block or "When" in block or "Then" in block:
-                                step_definitions = block
-
-                        # If we couldn't distinguish, just assign them in order
-                        if not page_object and len(java_blocks) > 0:
-                            page_object = java_blocks[0]
-                        if not step_definitions and len(java_blocks) > 1:
-                            step_definitions = java_blocks[1]
-
-                    # Create a fallback parsed output
-                    parsed_output = {
-                        "feature_file": feature_file or "# Error extracting feature file",
-                        "step_definitions": step_definitions or "// Error extracting step definitions",
-                        "page_object": page_object or "// Error extracting page object",
-                    }
+                    parsed_output = self._extract_code_blocks_with_enhanced_regex(response.content)
 
                 # Add metadata
                 parsed_output["url"] = page_analysis.get("url", "")
@@ -1295,30 +1243,257 @@ class LLMAnalyzer:
 
     def parse_json_safely(self, json_str):
         """
-        Parse JSON with error handling and some basic recovery attempts.
+        Parse JSON with error handling and more robust recovery attempts.
         """
         try:
             # First try standard parsing
             return json.loads(json_str)
         except json.JSONDecodeError as e:
-            self.logger.warning(f"Initial JSON parsing failed: {str(e)}")
+            logger.warning(f"Initial JSON parsing failed: {str(e)}")
+
+            # Log specific error position for debugging
+            if hasattr(e, 'lineno') and hasattr(e, 'colno'):
+                line = json_str.split('\n')[e.lineno-1] if e.lineno > 0 and e.lineno <= len(json_str.split('\n')) else ""
+                context = f"Error near line {e.lineno}, column {e.colno}: {line}"
+                logger.debug(f"JSON context: {context}")
+
+            fixed_json = json_str
 
             # Try to fix common issues
             try:
                 # 1. Fix missing commas between objects in arrays
-                fixed_json = re.sub(r'}\s*{', '},{', json_str)
+                fixed_json = re.sub(r'}\s*{', '},{', fixed_json)
 
                 # 2. Fix trailing commas in arrays and objects
                 fixed_json = re.sub(r',\s*}', '}', fixed_json)
                 fixed_json = re.sub(r',\s*]', ']', fixed_json)
 
-                return json.loads(fixed_json)
-            except json.JSONDecodeError as e2:
-                self.logger.error(f"JSON parsing error: {str(e2)}")
-                # Provide more context about the error location
-                if hasattr(e2, 'lineno') and hasattr(e2, 'colno'):
-                    line = json_str.split('\n')[e2.lineno-1] if e2.lineno > 0 and e2.lineno <= len(json_str.split('\n')) else ""
-                    context = f"Error near: {line}"
-                    self.logger.error(f"JSON context: {context}")
+                # 3. Fix unescaped quotes in strings (particularly in button text)
+                # Find strings and ensure quotes are properly escaped
+                def fix_quotes_in_string(match):
+                    content = match.group(1)
+                    # Replace all unescaped quotes with escaped ones
+                    # First escape already escaped quotes temporarily
+                    content = content.replace('\\"', '___ESCAPED_QUOTE___')
+                    # Then escape all remaining quotes
+                    content = content.replace('"', '\\"')
+                    # Restore temporarily escaped quotes
+                    content = content.replace('___ESCAPED_QUOTE___', '\\"')
+                    return '"' + content + '"'
 
-                raise
+                # Apply to string content inside JSON
+                fixed_json = re.sub(r'"((?:\\"|[^"])*)"', fix_quotes_in_string, fixed_json)
+
+                # 4. Fix specific issues related to button action strings
+                # Look for common patterns in button-related JSON errors
+                button_patterns = [
+                    (r'click on the "(.*?)" button', r'click on the \\"\\1\\" button'),
+                    (r'Click "(.*?)" button', r'Click \\"\\1\\" button'),
+                    (r'click the "(.*?)" button', r'click the \\"\\1\\" button'),
+                    (r'click "(.*?)"', r'click \\"\\1\\"'),
+                ]
+
+                for pattern, replacement in button_patterns:
+                    fixed_json = re.sub(pattern, replacement, fixed_json)
+
+                # Try parsing with fixes
+                try:
+                    return json.loads(fixed_json)
+                except json.JSONDecodeError as e2:
+                    logger.debug(f"First round of fixes failed: {str(e2)}")
+
+                    # 5. More aggressive fixes if the first round failed
+                    # Strip any markdown formatting that might be present
+                    if fixed_json.startswith("```json") or fixed_json.startswith("```"):
+                        lines = fixed_json.split("\n")
+                        fixed_json = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+
+                    # 6. Try replacing all problematic quotes in entire strings
+                    fixed_json = fixed_json.replace('\n', ' ')
+                    fixed_json = re.sub(r'(?<!")(")(?!")', '\\"', fixed_json)
+
+                    # 7. Fix Cucumber step strings which often contain quotes
+                    cucumber_steps = [
+                        "Given", "When", "Then", "And", "But"
+                    ]
+                    for step in cucumber_steps:
+                        pattern = f'{step} (.*?".*?[^\\\\]")'
+                        fixed_json = re.sub(pattern, lambda m: f'{step} ' + m.group(1).replace('"', '\\"'), fixed_json)
+
+                    return json.loads(fixed_json)
+            except json.JSONDecodeError as final_e:
+                logger.error(f"JSON parsing recovery attempts failed: {str(final_e)}")
+                logger.info("Falling back to regex-based extraction")
+
+                # Fall back to regex-based extraction
+                return self._extract_code_blocks_with_enhanced_regex(json_str)
+
+    def parse_llm_json_response(response_content):
+        """
+        More robust parser for LLM-generated JSON responses that might have formatting issues.
+        """
+        try:
+            # First try standard parsing
+            return json.loads(response_content)
+        except json.JSONDecodeError:
+            # Try to extract JSON block if it's embedded in markdown or text
+            json_pattern = r'```json\s*([\s\S]*?)\s*```'
+            json_matches = re.findall(json_pattern, response_content)
+
+            if json_matches:
+                for json_content in json_matches:
+                    try:
+                        return json.loads(json_content)
+                    except json.JSONDecodeError:
+                        continue
+
+            # If that fails, try common fixes for JSON formatting issues
+            try:
+                # Fix missing quotes around keys
+                fixed_content = re.sub(r'(\s*?)(\w+)(\s*?):', r'\1"\2"\3:', response_content)
+                return json.loads(fixed_content)
+            except json.JSONDecodeError:
+                # Other common fixes can be added here
+                pass
+
+            # Fall back to regex-based extraction as a last resort
+            logger.warning("JSON parsing recovery attempts failed, falling back to regex extraction")
+            return _extract_code_blocks_with_enhanced_regex(response_content)
+
+    @staticmethod
+    def _extract_code_blocks_with_enhanced_regex(content):
+        """
+        Enhanced version of code block extraction with better edge case handling.
+        """
+        logger.info("Falling back to regex-based code block extraction")
+        feature_file = ""
+        step_definitions = ""
+        page_object = ""
+
+        # Extract feature file (multiple approaches)
+        feature_patterns = [
+            r"```(?:gherkin|feature|cucumber)\n(.*?)```",
+            r"```feature\n(.*?)```",
+            r"Feature:(.*?)(?=```|Scenario:|Background:|@|\n\n\n)",
+            r"# Language: gherkin\n(.*?)(?=```)"
+        ]
+
+        for pattern in feature_patterns:
+            match = re.search(pattern, content, re.DOTALL)
+            if match:
+                feature_file = match.group(1).strip()
+                if feature_file and not feature_file.startswith("Feature:"):
+                    feature_file = "Feature: " + feature_file
+                break
+
+        # Scan for content that looks like a feature file if no explicit feature block
+        if not feature_file:
+            for line in content.split("\n"):
+                if line.strip().startswith("Feature:") or line.strip().startswith("Scenario:"):
+                    feature_start_idx = content.find(line)
+                    feature_content = content[feature_start_idx:]
+
+                    # Find a reasonable end for the feature content
+                    end_markers = ["```", "public class", "import", "@Given"]
+                    end_idx = len(feature_content)
+
+                    for marker in end_markers:
+                        marker_idx = feature_content.find(marker)
+                        if marker_idx > 0 and marker_idx < end_idx:
+                            end_idx = marker_idx
+
+                    feature_file = feature_content[:end_idx].strip()
+                    break
+
+        # Extract step definitions
+        step_patterns = [
+            r"```(?:java|step(?:s)?|stepdef(?:s)?)\n(.*?public class.*?(?:Steps|StepDefinitions).*?)```",
+            r"```java\n(.*?)```",
+            r"(?:public class|import).*?(?:Steps|StepDefinitions)(.*?)(?=```|\n\n\n|public class)",
+        ]
+
+        for pattern in step_patterns:
+            match = re.search(pattern, content, re.DOTALL)
+            if match:
+                step_content = match.group(1).strip()
+                # Check if this is actually step definitions and not page object
+                if "@Given" in step_content or "@When" in step_content or "@Then" in step_content:
+                    step_definitions = step_content
+                    break
+
+        # Extract page object
+        page_patterns = [
+            r"```(?:java|pageobject|page)\n(.*?public class.*?(?:Page|PageObject).*?)```",
+            r"public class\s+\w+(?:Page|PageObject)(.*?)(?=```|\n\n\n|public class|@Given)",
+        ]
+
+        for pattern in page_patterns:
+            match = re.search(pattern, content, re.DOTALL)
+            if match:
+                page_content = match.group(1).strip()
+                # Check if this is actually a page object
+                if "WebElement" in page_content or "findElement" in page_content or "driver" in page_content:
+                    page_object = page_content
+                    break
+
+        # If no explicit step definitions or page object found, try to infer from the content
+        if not step_definitions:
+            # Look for @Given, @When, @Then annotations
+            for block in re.findall(r"```java\n(.*?)```", content, re.DOTALL):
+                if "@Given" in block or "@When" in block or "@Then" in block:
+                    step_definitions = block
+                    break
+
+        if not page_object:
+            # Look for a class with "Page" in the name or WebElement members
+            for block in re.findall(r"```java\n(.*?)```", content, re.DOTALL):
+                if "class" in block and ("Page" in block or "WebElement" in block):
+                    if not ("@Given" in block or "@When" in block or "@Then" in block):  # Not step definitions
+                        page_object = block
+                        break
+
+        logger.info(f"Extraction results - Feature file: {bool(feature_file)}, Step definitions: {bool(step_definitions)}, Page object: {bool(page_object)}")
+
+        return {
+            "feature_file": feature_file or "# Error extracting feature file",
+            "step_definitions": step_definitions or "// Error extracting step definitions",
+            "page_object": page_object or "// Error extracting page object"
+        }
+
+    def generate_test_script_with_retry(self, page_analysis, framework="cucumber", language="java", max_retries=2):
+        """
+        Generate test script with retry logic for handling parsing failures.
+        """
+        for attempt in range(max_retries + 1):
+            try:
+                # Standard generation
+                result = self.generate_test_script(page_analysis, framework, language)
+
+                # Check if generation was successful
+                if "error" not in result or not result["error"]:
+                    return result
+
+                # If we're here, there was an error
+                if attempt < max_retries:
+                    logger.warning(f"Test script generation failed, retrying ({attempt+1}/{max_retries})...")
+
+                    # Modify the page analysis slightly for the retry
+                    # (Adding a note can help the LLM generate different output)
+                    retry_analysis = page_analysis.copy()
+                    retry_analysis["retry_attempt"] = attempt + 1
+                    retry_analysis["retry_note"] = "Please ensure output is in valid JSON format with proper escaping."
+                else:
+                    # Final attempt failed, return the error result
+                    return result
+
+            except Exception as e:
+                logger.error(f"Error in test script generation attempt {attempt+1}: {str(e)}")
+                if attempt >= max_retries:
+                    return {
+                        "url": page_analysis.get("url", ""),
+                        "title": page_analysis.get("title", ""),
+                        "error": str(e),
+                        "feature_file": "# Error in test generation after multiple attempts",
+                        "step_definitions": "// Error in test generation after multiple attempts",
+                        "page_object": "// Error in test generation after multiple attempts"
+                    }

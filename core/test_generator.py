@@ -79,6 +79,8 @@ class TestGenerator:
             return {}
 
         # Generate tests for each page
+        successful_pages = 0
+        failed_pages = 0
         for url, page_data in all_pages.items():
             try:
                 # Skip if page data is incomplete (unless it's pre-analyzed data)
@@ -127,22 +129,73 @@ class TestGenerator:
                     # Store the raw page data that contains user flow information
                     page_analysis["raw_page_data"] = page_data
 
-                test_script = self.llm_analyzer.generate_test_script(
-                    page_analysis, framework
-                )
+                # Use the retry-enabled test generation with additional safeguards
+                try:
+                    # Add the url to the analysis if not present
+                    if "url" not in page_analysis:
+                        page_analysis["url"] = url
+
+                    # Add the title to the analysis if not present
+                    if "title" not in page_analysis and "title" in page_data:
+                        page_analysis["title"] = page_data["title"]
+
+                    test_script = self.llm_analyzer.generate_test_script_with_retry(
+                        page_analysis,
+                        framework,
+                        max_retries=2
+                    )
+
+                    # Validate the result has minimum required structure
+                    # If there's an error but the fallback extraction worked, we'll still have these fields
+                    if not all(key in test_script for key in ["feature_file", "step_definitions", "page_object"]):
+                        logger.warning(f"Test script for {url} is missing required fields, creating basic fallback")
+
+                        # Create a basic fallback
+                        title = page_data.get('title', 'Unknown Page')
+                        test_script = {
+                            "url": url,
+                            "title": title,
+                            "feature_file": f"Feature: Basic test for {title}\n\nScenario: Verify page loads\n  Given I open the url \"{url}\"\n  Then I expect the page title contains \"{title}\"",
+                            "step_definitions": f"// Basic step definitions for {url}",
+                            "page_object": f"// Basic page object for {url}"
+                        }
+                except Exception as script_gen_error:
+                    logger.error(f"Failed to generate test script for {url}: {str(script_gen_error)}")
+                    # Create a basic fallback
+                    title = page_data.get('title', 'Unknown Page')
+                    test_script = {
+                        "url": url,
+                        "title": title,
+                        "error": str(script_gen_error),
+                        "feature_file": f"Feature: Error fallback for {title}\n\nScenario: Verify page loads\n  Given I open the url \"{url}\"\n  Then I expect the page title contains \"{title}\"",
+                        "step_definitions": f"// Error in generation for {url}: {str(script_gen_error)}",
+                        "page_object": f"// Error in generation for {url}: {str(script_gen_error)}"
+                    }
 
                 # Add to generated tests
                 generated_tests[url] = test_script
 
-                # Save test files
-                self._save_test_files(test_script, url, output_dir, framework, language)
+                # Save test files with additional error handling
+                try:
+                    self._save_test_files(test_script, url, output_dir, framework, language)
+                    successful_pages += 1
+                except Exception as save_error:
+                    logger.error(f"Failed to save test files for {url}: {str(save_error)}")
+                    failed_pages += 1
 
             except Exception as e:
-                logger.error(f"Error generating tests for {url}: {str(e)}")
+                logger.error(f"Unhandled error generating tests for {url}: {str(e)}")
+                failed_pages += 1
                 continue
 
+        # Log summary of processing
+        logger.info(f"Test generation complete: {successful_pages} successful, {failed_pages} failed out of {len(all_pages)} total pages")
+
         # Generate test suite file
-        self._generate_test_suite(generated_tests, output_dir, framework, language)
+        try:
+            self._generate_test_suite(generated_tests, output_dir, framework, language)
+        except Exception as suite_error:
+            logger.error(f"Error generating test suite: {str(suite_error)}")
 
         # Return the generated tests dictionary
         return generated_tests
@@ -205,6 +258,16 @@ class TestGenerator:
             language (str): Programming language to use
         """
         try:
+            # Verify that test_script is valid (contains expected keys)
+            if not isinstance(test_script, dict):
+                logger.error(f"Invalid test script format for {url}: not a dictionary")
+                return
+
+            # Check for error in test script generation
+            if "error" in test_script and test_script["error"]:
+                logger.error(f"Error in test script for {url}: {test_script['error']}")
+                # Continue anyway - we'll use the fallback content provided in the keys
+
             # Create safe filename from URL
             safe_url = self._safe_filename(url)
             page_title = test_script.get("title", "Unknown Page")
@@ -215,6 +278,16 @@ class TestGenerator:
             # Create subdirectory for page type
             page_type_dir = os.path.join(output_dir, page_type)
             os.makedirs(page_type_dir, exist_ok=True)
+
+            # Ensure all required keys exist, with fallbacks if not
+            required_keys = ["feature_file", "step_definitions", "page_object"]
+            for key in required_keys:
+                if key not in test_script or not test_script[key]:
+                    logger.warning(f"Missing '{key}' in test script for {url}, using placeholder")
+                    if key == "feature_file":
+                        test_script[key] = f"Feature: {page_title}\n\nScenario: Verify page loads\n  Given I open the url \"{url}\"\n  Then I expect the page title contains \"{page_title}\""
+                    else:
+                        test_script[key] = f"// Error: Failed to generate {key} for {url}"
 
             # Write feature file
             feature_file = os.path.join(page_type_dir, f"{safe_url}_spec.feature")
@@ -265,6 +338,20 @@ class TestGenerator:
 
         except Exception as e:
             logger.error(f"Error saving test files for {url}: {str(e)}")
+            # Create emergency fallback files if we can
+            try:
+                emergency_dir = os.path.join(output_dir, "emergency_fallback")
+                os.makedirs(emergency_dir, exist_ok=True)
+                safe_url = self._safe_filename(url)
+
+                # Create basic feature file as fallback
+                feature_content = f"Feature: Emergency fallback for {url}\n\nScenario: Basic page verification\n  Given I open the url \"{url}\"\n  Then I verify the page loads"
+                with open(os.path.join(emergency_dir, f"{safe_url}_emergency.feature"), "w", encoding="utf-8") as f:
+                    f.write(feature_content)
+
+                logger.info(f"Created emergency fallback test for {url}")
+            except Exception as fallback_error:
+                logger.error(f"Failed to create emergency fallback: {str(fallback_error)}")
 
     def _determine_page_type(self, test_script_or_title, url=None):
         """
