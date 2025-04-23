@@ -1402,41 +1402,34 @@ class LLMAnalyzer:
 
     def generate_test_script_with_retry(self, page_analysis, framework="cucumber", language="java", max_retries=2):
         """
-        Generate test script with retry logic for handling parsing failures.
+        Generate test script with retry mechanism, using the direct text approach.
+
+        Args:
+            page_analysis (dict): Analysis results from analyze_page
+            framework (str): Test framework to generate script for
+            language (str): Programming language for implementation
+            max_retries (int): Maximum number of retries
+
+        Returns:
+            dict: Generated test script information
         """
-        for attempt in range(max_retries + 1):
-            try:
-                # Standard generation
-                result = self.generate_test_script(page_analysis, framework, language)
-
-                # Check if generation was successful
-                if "error" not in result or not result["error"]:
-                    return result
-
-                # If we're here, there was an error
-                if attempt < max_retries:
-                    logger.warning(f"Test script generation failed, retrying ({attempt+1}/{max_retries})...")
-
-                    # Modify the page analysis slightly for the retry
-                    # (Adding a note can help the LLM generate different output)
-                    retry_analysis = page_analysis.copy()
-                    retry_analysis["retry_attempt"] = attempt + 1
-                    retry_analysis["retry_note"] = "Please ensure output is in valid JSON format with proper escaping."
-                else:
-                    # Final attempt failed, return the error result
-                    return result
-
-            except Exception as e:
-                logger.error(f"Error in test script generation attempt {attempt+1}: {str(e)}")
-                if attempt >= max_retries:
-                    return {
-                        "url": page_analysis.get("url", ""),
-                        "title": page_analysis.get("title", ""),
-                        "error": str(e),
-                        "feature_file": "# Error in test generation after multiple attempts",
-                        "step_definitions": "// Error in test generation after multiple attempts",
-                        "page_object": "// Error in test generation after multiple attempts"
-                    }
+        # Use the direct raw approach which is more reliable
+        try:
+            raw_response = self.generate_test_script_raw(page_analysis, framework, language)
+            # Parse the raw response into sections
+            return self._parse_raw_test_script(raw_response, page_analysis)
+        except Exception as e:
+            logger.error(f"Error with raw test script generation: {str(e)}")
+            # Create a fallback response
+            url = page_analysis.get("url", "")
+            title = page_analysis.get("title", "Unknown Page")
+            return {
+                "url": url,
+                "title": title,
+                "feature_file": f"Feature: Error fallback for {title}\n\nScenario: Verify page loads\n  Given I open the url \"{url}\"\n  Then I expect the page title contains \"{title}\"",
+                "step_definitions": f"// Error in generation: {str(e)}",
+                "page_object": f"// Error in generation: {str(e)}"
+            }
 
     def generate_test_script_raw(self, page_analysis, framework="cucumber", language="java"):
         """
@@ -1502,37 +1495,6 @@ class LLMAnalyzer:
             // Error occurred: {str(e)}
             // Basic page object
             """
-
-    def generate_test_script_with_retry(self, page_analysis, framework="cucumber", language="java", max_retries=2):
-        """
-        Generate test script with retry mechanism, falling back to the raw approach if JSON parsing fails.
-
-        Args:
-            page_analysis (dict): Analysis results from analyze_page
-            framework (str): Test framework to generate script for
-            language (str): Programming language for implementation
-            max_retries (int): Maximum number of retries
-
-        Returns:
-            dict: Generated test script information
-        """
-        # First try using the raw approach which is more reliable
-        try:
-            raw_response = self.generate_test_script_raw(page_analysis, framework, language)
-            # Parse the raw response into sections
-            return self._parse_raw_test_script(raw_response, page_analysis)
-        except Exception as e:
-            logger.error(f"Error with raw test script generation: {str(e)}")
-            # Create a fallback response
-            url = page_analysis.get("url", "")
-            title = page_analysis.get("title", "Unknown Page")
-            return {
-                "url": url,
-                "title": title,
-                "feature_file": f"Feature: Error fallback for {title}\n\nScenario: Verify page loads\n  Given I open the url \"{url}\"\n  Then I expect the page title contains \"{title}\"",
-                "step_definitions": f"// Error in generation: {str(e)}",
-                "page_object": f"// Error in generation: {str(e)}"
-            }
 
     def _parse_raw_test_script(self, raw_script, page_analysis):
         """
