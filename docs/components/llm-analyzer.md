@@ -1,138 +1,110 @@
 # LLM Analyzer
 
-The LLM Analyzer component uses Large Language Models to analyze web pages and identify test scenarios.
+The LLM Analyzer is a core component of the framework responsible for analyzing web pages using Large Language Models and generating test scenarios.
 
 ## Overview
 
-The `LLMAnalyzer` class processes page data extracted by the Web Crawler, using OpenAI models to understand page structure, functionality, and identify testing opportunities. It combines traditional DOM analysis with vision-based analysis for a comprehensive understanding of the page.
+The `LLMAnalyzer` class processes page data extracted by the WebCrawler to identify key elements, understand page structure, and suggest test scenarios. It uses OpenAI's models for both text-based and vision-based analysis.
 
-## Features
+## Key Features
 
-- **Multi-modal Analysis**: Combines DOM analysis with vision capabilities
-- **Page Classification**: Automatically detects page types (login, form, landing, etc.)
-- **Element Identification**: Identifies interactive elements and their purpose
-- **Test Scenario Detection**: Suggests relevant test scenarios for each page
-- **User Flow Understanding**: Interprets and incorporates user flows
-- **Context Awareness**: Maintains context between related pages
+- **DOM Analysis**: Analyzes page structure based on HTML elements
+- **Vision Analysis**: Uses GPT-4o-mini vision capabilities to analyze screenshots
+- **Test Scenario Generation**: Identifies potential test scenarios based on page functionality
+- **User Flow Integration**: Incorporates recorded user interactions into analysis
+- **Comprehensive Test Prompting**: Creates detailed prompts with examples and formatting guidance
 
 ## Usage
 
-The LLM Analyzer can be used directly or through the framework's main commands:
-
 ```python
 from core.llm_analyzer import LLMAnalyzer
-from core.crawler import PageData
+from config.config import Config
 
 # Initialize the analyzer
-analyzer = LLMAnalyzer()
+config = Config()
+analyzer = LLMAnalyzer(config)
 
 # Analyze a page
-page_data = crawler.crawl("https://example.com/login")
-analysis_result = analyzer.analyze(page_data)
+analysis = analyzer.analyze_page(page_data)
 
-# Access analysis results
-page_type = analysis_result.page_type
-elements = analysis_result.interactive_elements
-test_scenarios = analysis_result.suggested_scenarios
+# Generate test script
+test_script = analyzer.generate_test_script(analysis, framework="cucumber", language="java")
 ```
 
-## Configuration Options
+## Methods
 
-The LLM Analyzer behavior can be customized through several options:
+### `analyze_page(page_data)`
 
-| Option           | Description                 | Default       |
-| ---------------- | --------------------------- | ------------- |
-| `model`          | OpenAI model to use         | `gpt-4o-mini` |
-| `vision_enabled` | Enable vision analysis      | `True`        |
-| `vision_quality` | Image quality for vision    | `auto`        |
-| `max_tokens`     | Maximum tokens for response | `4000`        |
-| `temperature`    | Creativity level (0-1)      | `0.1`         |
-| `cache_results`  | Cache analysis results      | `True`        |
-| `api_key`        | OpenAI API key              | From `.env`   |
-
-## Analysis Result Structure
-
-When a page is analyzed, the `LLMAnalyzer` returns an `AnalysisResult` object with the following properties:
+Analyzes page data to identify key elements for testing.
 
 ```python
-class AnalysisResult:
-    page_url: str              # The URL that was analyzed
-    page_type: str             # Detected page type (login, form, etc.)
-    interactive_elements: list # Interactive elements with details
-    suggested_scenarios: list  # Suggested test scenarios
-    form_fields: list          # Form fields with validation info
-    buttons: list              # Buttons with actions
-    links: list                # Important links on the page
-    assertions: list           # Suggested assertions
-    metadata: dict             # Additional analysis metadata
-    timestamp: datetime        # When the analysis was performed
+analysis = analyzer.analyze_page(page_data)
 ```
+
+### `analyze_page_with_vision(page_data)`
+
+Enhanced analysis using vision capabilities with screenshots.
+
+```python
+analysis = analyzer.analyze_page_with_vision(page_data)
+```
+
+### `generate_test_script(page_analysis, framework="cucumber", language="java")`
+
+Generates test scripts based on page analysis.
+
+```python
+test_script = analyzer.generate_test_script(page_analysis, framework="cucumber", language="java")
+```
+
+### `generate_test_script_raw(page_analysis, framework="cucumber", language="java")`
+
+Generates test scripts and returns the raw LLM response without JSON parsing.
+
+```python
+raw_response = analyzer.generate_test_script_raw(page_analysis, framework="cucumber", language="java")
+```
+
+### `generate_test_script_with_retry(page_analysis, framework="cucumber", language="java", max_retries=2)`
+
+Generates test scripts with retry logic to handle potential errors.
+
+```python
+test_script = analyzer.generate_test_script_with_retry(page_analysis, framework="cucumber", language="java")
+```
+
+## Test Generation Prompting
+
+The `_format_test_generation_prompt` method creates comprehensive prompts for the LLM that include:
+
+1. **Examples of well-formed feature files** - Demonstrates proper Gherkin syntax
+2. **Examples of step definitions** - Shows how steps should be implemented
+3. **Context from page analysis** - Provides key elements, identifiers, and layout details
+4. **User flow information** - Includes recorded user interactions when available
+5. **Detailed guidelines** - Instructions for test quality and best practices
+6. **Formatting instructions** - Ensures proper output structure
+
+The prompt features sections for:
+
+- URL and title information
+- Page analysis summary
+- Verified user interactions (from recorded flows)
+- Unique page identifiers
+- Key interactive elements
+- Recommended test scenarios
+- Suggested smoke test steps
+- Locator strategies for elements
+
+This comprehensive prompting approach ensures high-quality test generation with realistic scenarios based on actual page functionality and user behavior.
 
 ## Vision Analysis
 
-The LLM Analyzer uses OpenAI's vision capabilities to analyze page screenshots:
+When vision capabilities are enabled, the LLM Analyzer uses a multi-step process:
 
-```python
-# Enable vision analysis
-analyzer = LLMAnalyzer(vision_enabled=True, vision_quality="high")
-
-# Analyze a page with vision
-result = analyzer.analyze_with_vision(page_data)
-
-# Vision-specific findings
-visual_elements = result.visual_elements
-layout_analysis = result.layout_analysis
-```
-
-## Advanced Usage
-
-### Custom Analysis Prompts
-
-You can customize the analysis by providing custom prompts:
-
-```python
-# Custom prompt for special page types
-custom_prompt = """
-Analyze this e-commerce product page and identify:
-1. Product information fields
-2. Add to cart functionality
-3. Product image gallery behavior
-4. Price display and discount calculation
-"""
-
-result = analyzer.analyze_with_custom_prompt(page_data, custom_prompt)
-```
-
-### Incorporating User Flows
-
-The analyzer can incorporate user flows for better context:
-
-```python
-# With user flow
-from core.crawler import UserFlow
-
-flow = UserFlow.from_file("flows/checkout_flow.txt")
-result = analyzer.analyze_with_user_flow(page_data, flow)
-
-# Flow-aware results
-flow_steps = result.flow_steps
-critical_paths = result.critical_paths
-```
-
-### Batch Processing
-
-For analyzing multiple pages efficiently:
-
-```python
-# Batch analysis
-page_data_list = [
-    crawler.crawl("https://example.com/login"),
-    crawler.crawl("https://example.com/register"),
-    crawler.crawl("https://example.com/checkout")
-]
-
-results = analyzer.analyze_batch(page_data_list)
-```
+1. **Screenshot Optimization** - Prepares the screenshot for API submission
+2. **Visual Element Detection** - Identifies elements visible in the UI
+3. **Layout Understanding** - Analyzes the visual structure of the page
+4. **DOM Integration** - Combines visual insights with DOM-based analysis
 
 ## Performance Optimization
 

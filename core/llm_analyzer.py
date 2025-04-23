@@ -1246,87 +1246,27 @@ class LLMAnalyzer:
         Parse JSON with error handling and more robust recovery attempts.
         """
         try:
-            # First try standard parsing
             return json.loads(json_str)
         except json.JSONDecodeError as e:
-            logger.warning(f"Initial JSON parsing failed: {str(e)}")
+            logger.warning(f"JSON parsing error: {str(e)}. Attempting recovery...")
 
-            # Log specific error position for debugging
-            if hasattr(e, 'lineno') and hasattr(e, 'colno'):
-                line = json_str.split('\n')[e.lineno-1] if e.lineno > 0 and e.lineno <= len(json_str.split('\n')) else ""
-                context = f"Error near line {e.lineno}, column {e.colno}: {line}"
-                logger.debug(f"JSON context: {context}")
-
-            fixed_json = json_str
-
-            # Try to fix common issues
+            # Try fixing common JSON issues
             try:
-                # 1. Fix missing commas between objects in arrays
-                fixed_json = re.sub(r'}\s*{', '},{', fixed_json)
+                # Replace single quotes with double quotes for keys and string values
+                fixed_json = re.sub(r"(\w+)\':", r'"\1":', json_str)
+                fixed_json = re.sub(r"\'(\w+)\'", r'"\1"', fixed_json)
+                return json.loads(fixed_json)
+            except json.JSONDecodeError:
+                # Try more aggressive fixing - extract braced content
+                match = re.search(r"\{.*\}", json_str, re.DOTALL)
+                if match:
+                    try:
+                        return json.loads(match.group(0))
+                    except json.JSONDecodeError:
+                        pass
 
-                # 2. Fix trailing commas in arrays and objects
-                fixed_json = re.sub(r',\s*}', '}', fixed_json)
-                fixed_json = re.sub(r',\s*]', ']', fixed_json)
-
-                # 3. Fix unescaped quotes in strings (particularly in button text)
-                # Find strings and ensure quotes are properly escaped
-                def fix_quotes_in_string(match):
-                    content = match.group(1)
-                    # Replace all unescaped quotes with escaped ones
-                    # First escape already escaped quotes temporarily
-                    content = content.replace('\\"', '___ESCAPED_QUOTE___')
-                    # Then escape all remaining quotes
-                    content = content.replace('"', '\\"')
-                    # Restore temporarily escaped quotes
-                    content = content.replace('___ESCAPED_QUOTE___', '\\"')
-                    return '"' + content + '"'
-
-                # Apply to string content inside JSON
-                fixed_json = re.sub(r'"((?:\\"|[^"])*)"', fix_quotes_in_string, fixed_json)
-
-                # 4. Fix specific issues related to button action strings
-                # Look for common patterns in button-related JSON errors
-                button_patterns = [
-                    (r'click on the "(.*?)" button', r'click on the \\"\\1\\" button'),
-                    (r'Click "(.*?)" button', r'Click \\"\\1\\" button'),
-                    (r'click the "(.*?)" button', r'click the \\"\\1\\" button'),
-                    (r'click "(.*?)"', r'click \\"\\1\\"'),
-                ]
-
-                for pattern, replacement in button_patterns:
-                    fixed_json = re.sub(pattern, replacement, fixed_json)
-
-                # Try parsing with fixes
-                try:
-                    return json.loads(fixed_json)
-                except json.JSONDecodeError as e2:
-                    logger.debug(f"First round of fixes failed: {str(e2)}")
-
-                    # 5. More aggressive fixes if the first round failed
-                    # Strip any markdown formatting that might be present
-                    if fixed_json.startswith("```json") or fixed_json.startswith("```"):
-                        lines = fixed_json.split("\n")
-                        fixed_json = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
-
-                    # 6. Try replacing all problematic quotes in entire strings
-                    fixed_json = fixed_json.replace('\n', ' ')
-                    fixed_json = re.sub(r'(?<!")(")(?!")', '\\"', fixed_json)
-
-                    # 7. Fix Cucumber step strings which often contain quotes
-                    cucumber_steps = [
-                        "Given", "When", "Then", "And", "But"
-                    ]
-                    for step in cucumber_steps:
-                        pattern = f'{step} (.*?".*?[^\\\\]")'
-                        fixed_json = re.sub(pattern, lambda m: f'{step} ' + m.group(1).replace('"', '\\"'), fixed_json)
-
-                    return json.loads(fixed_json)
-            except json.JSONDecodeError as final_e:
-                logger.error(f"JSON parsing recovery attempts failed: {str(final_e)}")
-                logger.info("Falling back to regex-based extraction")
-
-                # Fall back to regex-based extraction
-                return self._extract_code_blocks_with_enhanced_regex(json_str)
+                logger.error(f"Failed to parse JSON even after recovery attempts: {json_str[:100]}...")
+                return None
 
     def parse_llm_json_response(response_content):
         """
@@ -1512,39 +1452,33 @@ class LLMAnalyzer:
             str: Raw LLM response with test script content
         """
         try:
-            # Extract key information from page analysis
-            url = page_analysis.get("url", "")
-            title = page_analysis.get("title", "")
+            # Use the comprehensive prompt from _format_test_generation_prompt
+            # This ensures we include examples, guidelines, and proper context
+            formatted_messages = self._format_test_generation_prompt(
+                page_analysis,
+                language=language,
+                format_instructions=f"""
+                Return your response in the following format with clear section headers:
 
-            # Build a simpler prompt that requests the output in specific sections
-            prompt = f"""
-            Generate test scripts for a webpage using {framework} framework in {language}.
+                FEATURE FILE:
+                [Gherkin feature file content]
 
-            PAGE INFO:
-            - URL: {url}
-            - Title: {title}
+                STEP DEFINITIONS:
+                [Step definitions code in {language}]
 
-            ANALYSIS:
-            - Key Elements: {', '.join(page_analysis.get('key_elements', []))}
-            - Test Steps: {', '.join(page_analysis.get('smoke_test_steps', []))}
+                PAGE OBJECT:
+                [Page object code in {language}]
 
-            Return your response in the following format with clear section headers:
-
-            FEATURE FILE:
-            [Gherkin feature file content]
-
-            STEP DEFINITIONS:
-            [Step definitions code in {language}]
-
-            PAGE OBJECT:
-            [Page object code in {language}]
-
-            Each section should be separated with clear markers so they can be easily parsed.
-            """
+                Each section should be separated with clear markers so they can be easily parsed.
+                """
+            )
 
             # Get response from LLM
+            url = page_analysis.get("url", "")
             logger.info(f"Generating test script for {url} with framework {framework}")
-            response = self.llm.invoke(prompt)
+
+            # The formatted_messages is a list of messages, so we pass it to the LLM
+            response = self.llm.invoke(formatted_messages)
 
             logger.info(f"Test script generated successfully for {url}")
             return response.content

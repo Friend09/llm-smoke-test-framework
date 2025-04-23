@@ -20,6 +20,7 @@ This framework uses OpenAI's language models (like GPT-4o-mini) to analyze webpa
 - **Visual Analysis**: Uses GPT-4o-mini's vision capabilities to analyze page layouts and visual elements
 - **Adaptive Test Generation**: Tailors tests to specific page types (login, form, landing, etc.)
 - **Flexible Output**: Generates tests in Cucumber format with Java implementations (extensible to other languages)
+- **Comprehensive Test Generation**: Uses detailed prompts with examples and best practices for high-quality test scripts
 
 ## Installation
 
@@ -150,6 +151,8 @@ This organization helps keep tests for different sites separate and makes it eas
 
 ## Recent Updates
 
+- **Enhanced Test Generation Prompts**: Improved test generation with comprehensive prompts including examples, guidelines, and best practices
+- **Robust JSON Parsing**: Added better error handling and recovery for JSON parsing during test generation
 - **Enhanced User Flow Analysis**: Now extracts and uses all types of interactions, not just login credentials
 - **Fixed Test Generation**: Resolved prompt formatting issue for reliable test generation
 - **Improved Vision Analysis**: Better integration of DOM and vision-based analysis
