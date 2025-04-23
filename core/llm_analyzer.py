@@ -1497,3 +1497,168 @@ class LLMAnalyzer:
                         "step_definitions": "// Error in test generation after multiple attempts",
                         "page_object": "// Error in test generation after multiple attempts"
                     }
+
+    def generate_test_script_raw(self, page_analysis, framework="cucumber", language="java"):
+        """
+        Generate test script based on page analysis and return the raw unprocessed response.
+        This avoids JSON parsing issues by returning the direct LLM output.
+
+        Args:
+            page_analysis (dict): Analysis results from analyze_page
+            framework (str): Test framework to generate script for
+            language (str): Programming language for implementation
+
+        Returns:
+            str: Raw LLM response with test script content
+        """
+        try:
+            # Extract key information from page analysis
+            url = page_analysis.get("url", "")
+            title = page_analysis.get("title", "")
+
+            # Build a simpler prompt that requests the output in specific sections
+            prompt = f"""
+            Generate test scripts for a webpage using {framework} framework in {language}.
+
+            PAGE INFO:
+            - URL: {url}
+            - Title: {title}
+
+            ANALYSIS:
+            - Key Elements: {', '.join(page_analysis.get('key_elements', []))}
+            - Test Steps: {', '.join(page_analysis.get('smoke_test_steps', []))}
+
+            Return your response in the following format with clear section headers:
+
+            FEATURE FILE:
+            [Gherkin feature file content]
+
+            STEP DEFINITIONS:
+            [Step definitions code in {language}]
+
+            PAGE OBJECT:
+            [Page object code in {language}]
+
+            Each section should be separated with clear markers so they can be easily parsed.
+            """
+
+            # Get response from LLM
+            logger.info(f"Generating test script for {url} with framework {framework}")
+            response = self.llm.invoke(prompt)
+
+            logger.info(f"Test script generated successfully for {url}")
+            return response.content
+
+        except Exception as e:
+            logger.error(f"Error generating raw test script: {str(e)}")
+            # Return a basic fallback script
+            return f"""
+            FEATURE FILE:
+            Feature: Basic test for {page_analysis.get('title', 'Unknown Page')}
+
+            Scenario: Verify page loads
+              Given I open the url "{page_analysis.get('url', '')}"
+              Then I verify the page loads
+
+            STEP DEFINITIONS:
+            // Error occurred: {str(e)}
+            // Basic step definitions
+
+            PAGE OBJECT:
+            // Error occurred: {str(e)}
+            // Basic page object
+            """
+
+    def generate_test_script_with_retry(self, page_analysis, framework="cucumber", language="java", max_retries=2):
+        """
+        Generate test script with retry mechanism, falling back to the raw approach if JSON parsing fails.
+
+        Args:
+            page_analysis (dict): Analysis results from analyze_page
+            framework (str): Test framework to generate script for
+            language (str): Programming language for implementation
+            max_retries (int): Maximum number of retries
+
+        Returns:
+            dict: Generated test script information
+        """
+        # First try using the raw approach which is more reliable
+        try:
+            raw_response = self.generate_test_script_raw(page_analysis, framework, language)
+            # Parse the raw response into sections
+            return self._parse_raw_test_script(raw_response, page_analysis)
+        except Exception as e:
+            logger.error(f"Error with raw test script generation: {str(e)}")
+            # Create a fallback response
+            url = page_analysis.get("url", "")
+            title = page_analysis.get("title", "Unknown Page")
+            return {
+                "url": url,
+                "title": title,
+                "feature_file": f"Feature: Error fallback for {title}\n\nScenario: Verify page loads\n  Given I open the url \"{url}\"\n  Then I expect the page title contains \"{title}\"",
+                "step_definitions": f"// Error in generation: {str(e)}",
+                "page_object": f"// Error in generation: {str(e)}"
+            }
+
+    def _parse_raw_test_script(self, raw_script, page_analysis):
+        """
+        Parse a raw test script response into its component parts.
+
+        Args:
+            raw_script (str): Raw test script from LLM
+            page_analysis (dict): Original page analysis
+
+        Returns:
+            dict: Test script components
+        """
+        result = {
+            "url": page_analysis.get("url", ""),
+            "title": page_analysis.get("title", "Unknown Page"),
+            "feature_file": "",
+            "step_definitions": "",
+            "page_object": ""
+        }
+
+        # Simple text-based parsing by looking for section headers
+        sections = {
+            "FEATURE FILE": "feature_file",
+            "STEP DEFINITIONS": "step_definitions",
+            "PAGE OBJECT": "page_object"
+        }
+
+        current_section = None
+        lines = raw_script.split('\n')
+        section_content = []
+
+        for line in lines:
+            # Check if line contains a section header
+            found_section = False
+            for header, key in sections.items():
+                if header in line.upper():
+                    # Save previous section if there was one
+                    if current_section and section_content:
+                        result[current_section] = '\n'.join(section_content).strip()
+                        section_content = []
+
+                    # Set new current section
+                    current_section = key
+                    found_section = True
+                    break
+
+            # If this wasn't a section header and we're in a section, add to content
+            if not found_section and current_section:
+                section_content.append(line)
+
+        # Save the last section
+        if current_section and section_content:
+            result[current_section] = '\n'.join(section_content).strip()
+
+        # If any sections are missing, add placeholders
+        for key in ["feature_file", "step_definitions", "page_object"]:
+            if not result.get(key):
+                if key == "feature_file":
+                    result[key] = f"Feature: {result['title']}\n\nScenario: Verify page loads\n  Given I open the url \"{result['url']}\"\n  Then I verify the page loads"
+                else:
+                    result[key] = f"// No content generated for {key}"
+
+        return result

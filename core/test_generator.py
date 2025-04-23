@@ -129,7 +129,7 @@ class TestGenerator:
                     # Store the raw page data that contains user flow information
                     page_analysis["raw_page_data"] = page_data
 
-                # Use the retry-enabled test generation with additional safeguards
+                # Use the raw approach to test generation to avoid JSON parsing issues
                 try:
                     # Add the url to the analysis if not present
                     if "url" not in page_analysis:
@@ -139,14 +139,14 @@ class TestGenerator:
                     if "title" not in page_analysis and "title" in page_data:
                         page_analysis["title"] = page_data["title"]
 
+                    logger.info(f"Generating raw test script for {url}")
                     test_script = self.llm_analyzer.generate_test_script_with_retry(
                         page_analysis,
                         framework,
-                        max_retries=2
+                        max_retries=1
                     )
 
-                    # Validate the result has minimum required structure
-                    # If there's an error but the fallback extraction worked, we'll still have these fields
+                    # Ensure test_script has the minimal required fields
                     if not all(key in test_script for key in ["feature_file", "step_definitions", "page_object"]):
                         logger.warning(f"Test script for {url} is missing required fields, creating basic fallback")
 
@@ -248,7 +248,7 @@ class TestGenerator:
 
     def _save_test_files(self, test_script, url, output_dir, framework, language):
         """
-        Save generated test scripts to files.
+        Save generated test scripts to files directly without complex parsing.
 
         Args:
             test_script (dict): Generated test script
@@ -258,16 +258,6 @@ class TestGenerator:
             language (str): Programming language to use
         """
         try:
-            # Verify that test_script is valid (contains expected keys)
-            if not isinstance(test_script, dict):
-                logger.error(f"Invalid test script format for {url}: not a dictionary")
-                return
-
-            # Check for error in test script generation
-            if "error" in test_script and test_script["error"]:
-                logger.error(f"Error in test script for {url}: {test_script['error']}")
-                # Continue anyway - we'll use the fallback content provided in the keys
-
             # Create safe filename from URL
             safe_url = self._safe_filename(url)
             page_title = test_script.get("title", "Unknown Page")
@@ -279,62 +269,71 @@ class TestGenerator:
             page_type_dir = os.path.join(output_dir, page_type)
             os.makedirs(page_type_dir, exist_ok=True)
 
-            # Ensure all required keys exist, with fallbacks if not
-            required_keys = ["feature_file", "step_definitions", "page_object"]
-            for key in required_keys:
-                if key not in test_script or not test_script[key]:
-                    logger.warning(f"Missing '{key}' in test script for {url}, using placeholder")
-                    if key == "feature_file":
-                        test_script[key] = f"Feature: {page_title}\n\nScenario: Verify page loads\n  Given I open the url \"{url}\"\n  Then I expect the page title contains \"{page_title}\""
-                    else:
-                        test_script[key] = f"// Error: Failed to generate {key} for {url}"
+            # Directly write the content without trying to parse JSON structure
+            # This avoids issues with quotes and escaping
 
-            # Write feature file
-            feature_file = os.path.join(page_type_dir, f"{safe_url}_spec.feature")
-            with open(feature_file, "w", encoding="utf-8") as f:
-                f.write(test_script["feature_file"])
+            # Write feature file - handle both dict format and raw string format
+            feature_content = test_script.get("feature_file", "")
+            if feature_content:
+                feature_file = os.path.join(page_type_dir, f"{safe_url}_spec.feature")
+                with open(feature_file, "w", encoding="utf-8") as f:
+                    # Strip any markdown code block markers if present
+                    if isinstance(feature_content, str):
+                        feature_content = feature_content.replace("```feature", "").replace("```gherkin", "").replace("```", "").strip()
+                    f.write(feature_content)
+                logger.info(f"Feature file saved: {feature_file}")
 
             # Write step definitions
-            if language == "java":
-                # For Java, write to Java file based on page type
-                class_name = self._pascal_case(safe_url) + "Steps"
-                step_file = os.path.join(page_type_dir, f"{class_name}.java")
-                with open(step_file, "w", encoding="utf-8") as f:
-                    f.write(test_script["step_definitions"])
+            steps_content = test_script.get("step_definitions", "")
+            if steps_content:
+                if language == "java":
+                    # For Java, write to Java file based on page type
+                    class_name = self._pascal_case(safe_url) + "Steps"
+                    step_file = os.path.join(page_type_dir, f"{class_name}.java")
+                else:
+                    # For other languages, adjust as needed
+                    step_file = os.path.join(page_type_dir, f"{safe_url}_steps.{language}")
 
-                # Write page object
-                page_class_name = self._pascal_case(safe_url) + "Page"
-                page_file = os.path.join(page_type_dir, f"{page_class_name}.java")
-                with open(page_file, "w", encoding="utf-8") as f:
-                    f.write(test_script["page_object"])
-            else:
-                # For other languages, adjust as needed
-                step_file = os.path.join(page_type_dir, f"{safe_url}_steps.{language}")
                 with open(step_file, "w", encoding="utf-8") as f:
-                    f.write(test_script["step_definitions"])
+                    # Strip any markdown code block markers if present
+                    if isinstance(steps_content, str):
+                        steps_content = steps_content.replace("```java", "").replace("```", "").strip()
+                    f.write(steps_content)
+                logger.info(f"Step definitions saved: {step_file}")
 
-                # Write page object
-                page_file = os.path.join(page_type_dir, f"{safe_url}_page.{language}")
+            # Write page object
+            page_object_content = test_script.get("page_object", "")
+            if page_object_content:
+                if language == "java":
+                    # For Java, create a proper class file
+                    page_class_name = self._pascal_case(safe_url) + "Page"
+                    page_file = os.path.join(page_type_dir, f"{page_class_name}.java")
+                else:
+                    # For other languages, adjust as needed
+                    page_file = os.path.join(page_type_dir, f"{safe_url}_page.{language}")
+
                 with open(page_file, "w", encoding="utf-8") as f:
-                    f.write(test_script["page_object"])
+                    # Strip any markdown code block markers if present
+                    if isinstance(page_object_content, str):
+                        page_object_content = page_object_content.replace("```java", "").replace("```", "").strip()
+                    f.write(page_object_content)
+                logger.info(f"Page object saved: {page_file}")
 
             # Add page type tag to feature files for better organization
-            if framework == "cucumber" and "feature_file" in test_script:
-                feature_content = test_script["feature_file"]
-                # Call with the correct arguments now
-                page_type_tag = self._determine_page_type(test_script.get("page_title", ""), url)
+            if framework == "cucumber" and feature_content:
+                # Read the file back
+                with open(feature_file, "r", encoding="utf-8") as f:
+                    feature_text = f.read()
 
-                # Add tag to the feature if it doesn't already have one
-                if not feature_content.strip().startswith("@"):
-                    tag_line = f"@{page_type_tag.lower().replace(' ', '-')}\n"
-                    feature_content = tag_line + feature_content
-                    test_script["feature_file"] = feature_content
-
-                    # Update the feature file with the tag
+                # Add tag if not already present
+                if not feature_text.strip().startswith("@"):
+                    tag_line = f"@{page_type.lower().replace(' ', '-')}\n"
                     with open(feature_file, "w", encoding="utf-8") as f:
-                        f.write(feature_content)
+                        f.write(tag_line + feature_text)
+                    logger.info(f"Added page type tag to feature file: {feature_file}")
 
             logger.info(f"Generated test files for {url} in {page_type_dir}")
+            return True
 
         except Exception as e:
             logger.error(f"Error saving test files for {url}: {str(e)}")
@@ -350,8 +349,10 @@ class TestGenerator:
                     f.write(feature_content)
 
                 logger.info(f"Created emergency fallback test for {url}")
+                return False
             except Exception as fallback_error:
                 logger.error(f"Failed to create emergency fallback: {str(fallback_error)}")
+                return False
 
     def _determine_page_type(self, test_script_or_title, url=None):
         """

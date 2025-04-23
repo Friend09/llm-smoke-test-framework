@@ -34,6 +34,10 @@ class Config:
     SCREENSHOT_MAX_DIMENSION: int = 1280  # Maximum dimension in pixels
     SCREENSHOT_QUALITY: int = 75  # JPEG quality (1-100)
 
+    # Test generation settings
+    USE_DIRECT_TEXT: bool = True  # Use direct text-based approach instead of JSON parsing
+    GENERATE_NEGATIVE_TESTS: bool = False  # Whether to generate negative test cases
+
     # Add a parameter to organize files by site
     ORGANIZE_BY_SITE: bool = os.getenv("ORGANIZE_BY_SITE", "True").lower() == "true"
 
@@ -47,6 +51,8 @@ class Config:
         self.LLM_MODEL = os.getenv("LLM_MODEL", self.LLM_MODEL)
         self.LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", str(self.LLM_TEMPERATURE)))
         self.LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", str(self.LLM_MAX_TOKENS)))
+        self.USE_DIRECT_TEXT = os.getenv("USE_DIRECT_TEXT", str(self.USE_DIRECT_TEXT)).lower() == "true"
+        self.GENERATE_NEGATIVE_TESTS = os.getenv("GENERATE_NEGATIVE_TESTS", str(self.GENERATE_NEGATIVE_TESTS)).lower() == "true"
 
         # Create output directories
         self._create_output_directories()

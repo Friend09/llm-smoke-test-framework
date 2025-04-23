@@ -187,6 +187,13 @@ def generate_test_scripts(config: Config, analysis_file: str, framework: str = '
         # Initialize test generator
         test_gen = TestGenerator(config)
 
+        # Set output directory
+        if not output_dir:
+            output_dir = config.test_scripts_path
+
+        # Ensure the output directory exists
+        os.makedirs(output_dir, exist_ok=True)
+
         # Determine if this is a vision analysis (either by flag or filename)
         is_vision_analysis = use_vision or "_vision_analysis.json" in analysis_file
 
@@ -199,7 +206,8 @@ def generate_test_scripts(config: Config, analysis_file: str, framework: str = '
                 # This adapts a standard analysis for vision processing
                 analysis_data["vision_analysis"] = True
 
-        # Generate tests with the updated analysis
+        # Generate tests with the updated analysis using the raw approach
+        logger.info(f"Generating tests for {url} using direct text approach")
         generated_tests = test_gen.generate_tests(
             discovered_pages_data={url: analysis_data},
             output_dir=output_dir,
@@ -213,7 +221,7 @@ def generate_test_scripts(config: Config, analysis_file: str, framework: str = '
         output_files = {}
         for test_url, test_script in generated_tests.items():
             safe_url = test_gen._safe_filename(test_url)
-            test_file = os.path.join(output_dir or config.test_scripts_path, f"{safe_url}_spec.feature")
+            test_file = os.path.join(output_dir, f"{safe_url}_spec.feature")
             output_files[f"test_{safe_url}"] = test_file
 
         return output_files
