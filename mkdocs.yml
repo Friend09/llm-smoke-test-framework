@@ -1,0 +1,38 @@
+site_name: LLM Smoke Test Framework
+site_description: AI-powered framework for automatically generating smoke tests for web applications
+site_author: Raghuvamsi Ayapilla
+
+theme:
+  name: readthedocs
+  highlightjs: true
+
+nav:
+  - Home: index.md
+  - User Guide:
+    - Installation: guide/installation.md
+    - Quick Start: guide/quick-start.md
+    - Usage Examples: guide/usage-examples.md
+    - Command Reference: guide/command-reference.md
+  - Core Components:
+    - Architecture Overview: components/architecture.md
+    - Web Crawler: components/web-crawler.md
+    - LLM Analyzer: components/llm-analyzer.md
+    - Test Generator: components/test-generator.md
+    - Sitemap Crawler: components/sitemap-crawler.md
+  - Features:
+    - User Flow Integration: features/user-flows.md
+    - Vision Analysis: features/vision-analysis.md
+    - Site-Wide Testing: features/site-wide-testing.md
+  - Advanced Topics:
+    - Using External Sitemaps: advanced/using-external-sitemaps.md
+    - Output Structure: advanced/output-structure.md
+    - Configuration: advanced/configuration.md
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - toc:
+      permalink: true
+
+plugins:
+  - search
