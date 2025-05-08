@@ -9,12 +9,16 @@ from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain.output_parsers import StructuredOutputParser, ResponseSchema
 from config.config import Config
-from openai import OpenAI
+import openai
 import re
 from .screenshot_utils import optimize_screenshot
+from dotenv import load_dotenv
+import base64
 
 logger = logging.getLogger(__name__)
 
+load_dotenv()
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 class LLMAnalyzer:
     """
@@ -40,7 +44,7 @@ class LLMAnalyzer:
         )
 
         # Direct OpenAI client for vision capabilities
-        self.openai_client = OpenAI(api_key=self.config.OPENAI_API_KEY)
+        self.openai_client = openai.OpenAI(api_key=self.config.OPENAI_API_KEY)
 
     def analyze_page(self, page_data):
         """Analyze page data to identify key elements for testing."""
@@ -196,7 +200,7 @@ class LLMAnalyzer:
             response = self.llm.invoke(formatted_prompt)
 
             # Log response for debugging
-            logger.debug(f"Raw LLM response: {response.content[:500]}...")
+            logger.info(f"Raw LLM output:\n{response.content}")
 
             # Process the response
             return self._process_analysis_response(response.content, simplified_data)
@@ -220,7 +224,7 @@ class LLMAnalyzer:
         logger.info(f"Processing LLM response for {page_data.get('url', '')}")
 
         # Log the raw response for debugging
-        logger.debug(f"Raw LLM response: {response_content[:1000]}...")
+        logger.info(f"Raw LLM response: {response_content[:1000]}...")
 
         analysis_result = {
             "url": page_data.get("url", ""),
@@ -488,8 +492,7 @@ class LLMAnalyzer:
                 logger.warning("Failed to optimize screenshot. Vision analysis may be limited.")
                 # Fallback to reading the original file
                 with open(screenshot_path, "rb") as image_file:
-                    import base64
-                    screenshot_base64 = base64.b64encode(image_file.read()).decode()
+                    screenshot_base64 = base64.b64encode(image_file.read()).decode("utf-8")
                     image_format = "png"
 
             logger.info(f"Analyzing optimized screenshot from: {screenshot_path}")
@@ -513,7 +516,7 @@ class LLMAnalyzer:
 
             # Use the OpenAI client directly with vision capabilities
             response = self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",  # Using vision-capable model
+                model="gpt-4o",  # Using vision-capable model
                 messages=[
                     {
                         "role": "user",
@@ -886,23 +889,35 @@ class LLMAnalyzer:
         except Exception as e:
             logger.error(f"Error updating test strategies: {str(e)}")
 
-    def generate_test_script(self, page_analysis, framework="cucumber", language="java"):
+    def generate_test_script(self, page_analysis, framework="selenium", language="java"):
         """
-        Generate test script based on page analysis.
-
-        Args:
-            page_analysis (dict): Analysis results from analyze_page
-            framework (str): Test framework to generate script for
-            language (str): Programming language for implementation
-
-        Returns:
-            dict: Generated test script information
+        Generate both Gherkin feature file, step definitions, and page object for the given framework (default: selenium in Java).
         """
-        if framework.lower() == "cucumber":
-            return self._generate_cucumber_script(page_analysis, language)
-        else:
-            logger.warning(f"Unsupported framework: {framework}")
-            return {"error": f"Unsupported framework: {framework}"}
+        feature_result = self._generate_cucumber_script(page_analysis, language=language)
+        return {
+            "feature_file": feature_result.get("feature_file", ""),
+            "step_definitions": feature_result.get("step_definitions", ""),
+            "page_object": feature_result.get("page_object", ""),
+            "framework": framework,
+            "language": language,
+            "url": page_analysis.get("url", ""),
+            "title": page_analysis.get("title", "")
+        }
+
+    def _generate_automation_script(self, page_analysis, framework="selenium", language="java"):
+        """
+        Use the LLM to generate an automation script for the specified framework and language.
+        """
+        prompt = f"""
+You are an expert test automation engineer. Given the following web page analysis, generate a complete {framework} automation script in {language} that implements a smoke test for this page. The script should cover login if required, navigation, and basic assertions. Use best practices for the chosen framework and language.
+
+PAGE ANALYSIS:
+{json.dumps(page_analysis, indent=2)}
+
+Return only the code, no explanation.
+"""
+        response = self.llm.invoke(prompt)
+        return response.content.strip()
 
     def _generate_cucumber_script(self, page_analysis, language="java"):
         """
@@ -957,7 +972,7 @@ class LLMAnalyzer:
                     logger.error(f"JSON parsing error: {str(parse_error)}")
 
                     # Log the actual response content for debugging
-                    logger.debug(f"Response content: {response.content}")
+                    logger.info(f"Response content: {response.content}")
 
                     # Fall back to simple extraction of code blocks
                     parsed_output = self._extract_code_blocks_with_enhanced_regex(response.content)
@@ -1431,51 +1446,39 @@ class LLMAnalyzer:
                 "page_object": f"// Error in generation: {str(e)}"
             }
 
-    def generate_test_script_raw(self, page_analysis, framework="cucumber", language="java"):
+    def generate_test_script_raw(self, page_analysis, framework="selenium", language="java"):
         """
         Generate test script based on page analysis and return the raw unprocessed response.
         This avoids JSON parsing issues by returning the direct LLM output.
-
-        Args:
-            page_analysis (dict): Analysis results from analyze_page
-            framework (str): Test framework to generate script for
-            language (str): Programming language for implementation
-
-        Returns:
-            str: Raw LLM response with test script content
         """
         try:
-            # Use the comprehensive prompt from _format_test_generation_prompt
-            # This ensures we include examples, guidelines, and proper context
-            formatted_messages = self._format_test_generation_prompt(
-                page_analysis,
-                language=language,
-                format_instructions=f"""
-                Return your response in the following format with clear section headers:
+            prompt = f"""
+You are an expert test automation engineer. Given the following web page analysis, generate:
 
-                FEATURE FILE:
-                [Gherkin feature file content]
+1. A Gherkin feature file for a smoke test of the page.
+2. Java step definitions for Selenium using Cucumber annotations, implementing the steps in the feature file.
+3. A Java Page Object class for the page.
 
-                STEP DEFINITIONS:
-                [Step definitions code in {language}]
+Return your response in the following format, with each section clearly marked:
 
-                PAGE OBJECT:
-                [Page object code in {language}]
+FEATURE FILE:
+[Place the Gherkin feature file here]
 
-                Each section should be separated with clear markers so they can be easily parsed.
-                """
-            )
+STEP DEFINITIONS:
+[Place the Java step definitions here]
 
-            # Get response from LLM
-            url = page_analysis.get("url", "")
-            logger.info(f"Generating test script for {url} with framework {framework}")
+PAGE OBJECT:
+[Place the Java Page Object class here]
 
-            # The formatted_messages is a list of messages, so we pass it to the LLM
-            response = self.llm.invoke(formatted_messages)
+Do not include any explanation or extra text. Only output the code in the specified sections.
 
-            logger.info(f"Test script generated successfully for {url}")
+WEB PAGE ANALYSIS:
+{json.dumps(page_analysis, indent=2)}
+"""
+            logger.info(f"Generating test script for {page_analysis.get('url', '')} with framework {framework}")
+            response = self.llm.invoke(prompt)
+            logger.info(f"Raw LLM output:\n{response.content}")
             return response.content
-
         except Exception as e:
             logger.error(f"Error generating raw test script: {str(e)}")
             # Return a basic fallback script
@@ -1499,13 +1502,6 @@ class LLMAnalyzer:
     def _parse_raw_test_script(self, raw_script, page_analysis):
         """
         Parse a raw test script response into its component parts.
-
-        Args:
-            raw_script (str): Raw test script from LLM
-            page_analysis (dict): Original page analysis
-
-        Returns:
-            dict: Test script components
         """
         result = {
             "url": page_analysis.get("url", ""),
@@ -1514,47 +1510,63 @@ class LLMAnalyzer:
             "step_definitions": "",
             "page_object": ""
         }
-
-        # Simple text-based parsing by looking for section headers
-        sections = {
-            "FEATURE FILE": "feature_file",
-            "STEP DEFINITIONS": "step_definitions",
-            "PAGE OBJECT": "page_object"
+        patterns = {
+            "feature_file": r"FEATURE FILE:\s*(.*?)(?=\n[A-Z ]+?:|\Z)",
+            "step_definitions": r"STEP DEFINITIONS:\s*(.*?)(?=\n[A-Z ]+?:|\Z)",
+            "page_object": r"PAGE OBJECT:\s*(.*?)(?=\n[A-Z ]+?:|\Z)"
         }
-
-        current_section = None
-        lines = raw_script.split('\n')
-        section_content = []
-
-        for line in lines:
-            # Check if line contains a section header
-            found_section = False
-            for header, key in sections.items():
-                if header in line.upper():
-                    # Save previous section if there was one
-                    if current_section and section_content:
-                        result[current_section] = '\n'.join(section_content).strip()
-                        section_content = []
-
-                    # Set new current section
-                    current_section = key
-                    found_section = True
-                    break
-
-            # If this wasn't a section header and we're in a section, add to content
-            if not found_section and current_section:
-                section_content.append(line)
-
-        # Save the last section
-        if current_section and section_content:
-            result[current_section] = '\n'.join(section_content).strip()
-
-        # If any sections are missing, add placeholders
-        for key in ["feature_file", "step_definitions", "page_object"]:
-            if not result.get(key):
+        for key, pattern in patterns.items():
+            match = re.search(pattern, raw_script, re.DOTALL | re.IGNORECASE)
+            if match:
+                result[key] = match.group(1).strip()
+            else:
                 if key == "feature_file":
                     result[key] = f"Feature: {result['title']}\n\nScenario: Verify page loads\n  Given I open the url \"{result['url']}\"\n  Then I verify the page loads"
                 else:
                     result[key] = f"// No content generated for {key}"
-
         return result
+
+    def is_login_page(self, page_data, screenshot_path):
+        """
+        Use the LLM to determine if the given page is a login page.
+        Args:
+            page_data (dict): The extracted page data
+            screenshot_path (str): Path to the screenshot file
+        Returns:
+            bool: True if the page is a login page, False otherwise
+        """
+        # Read screenshot as bytes
+        with open(screenshot_path, "rb") as f:
+            screenshot_bytes = f.read()
+        screenshot_base64 = base64.b64encode(screenshot_bytes).decode("utf-8")
+
+        # Prepare prompt
+        prompt = (
+            "You are an expert web QA assistant. Given the following page data and screenshot, "
+            "determine if this is a login page. "
+            "A login page typically has username/email and password fields, and a login/submit button. "
+            "Reply with only 'yes' or 'no'.\n"
+            f"Page data: {json.dumps(page_data)[:2000]}\n"  # Truncate for safety
+        )
+
+        # Use OpenAI vision model if available, else fallback to text only
+        try:
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{screenshot_base64}"}}
+                    ]}
+                ],
+                max_tokens=10,
+            )
+            answer = response.choices[0].message.content.strip().lower()
+        except Exception as e:
+            logger.warning(f"Vision model failed, falling back to text only: {e}")
+            # Fallback: text only
+            response = self.llm.invoke(prompt)
+            answer = response.content.strip().lower()
+
+        return answer.startswith("yes")

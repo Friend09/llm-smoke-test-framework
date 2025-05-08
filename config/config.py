@@ -68,7 +68,7 @@ class Config:
         """Create all required output directories."""
         directories = {
             "page_data_path": os.path.join(self.OUTPUT_DIR, "page_data"),
-            "analysis_path": os.path.join(self.OUTPUT_DIR, "analysis"),
+            # Removed "analysis_path": os.path.join(self.OUTPUT_DIR, "analysis"),
             "test_scripts_path": os.path.join(self.OUTPUT_DIR, "test_scripts"),
             "screenshots_path": os.path.join(self.OUTPUT_DIR, "screenshots")
         }

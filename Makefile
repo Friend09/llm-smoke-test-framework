@@ -14,7 +14,7 @@ help:
 	@echo "  package    - Build package for distribution"
 
 install:
-	pip install -r requirements.txt
+	uv pip install -r requirements.txt
 
 test:
 	pytest tests/

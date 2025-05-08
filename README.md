@@ -1,168 +1,99 @@
-# LLM Smoke Test Framework
+# LLM Smoke Test Framework (Playwright Edition)
 
-An AI-powered framework for automatically generating smoke tests for web applications using Large Language Models (LLMs) and computer vision capabilities.
+A simple, powerful framework for automated smoke testing of any web application using Playwright and LLMs.
 
-## Overview
-
-This framework uses OpenAI's language models (like GPT-4o-mini) to analyze webpages and generate comprehensive smoke test scripts in Cucumber format. It can:
-
-- Crawl single pages or entire websites
-- Analyze page structure using both DOM analysis and vision capabilities
-- Generate Cucumber feature files, step definitions, and page objects
-- Record and incorporate user flows for more accurate tests
-- Process and analyze screenshots for better visual understanding
-
-## Key Features
-
-- **Multi-mode Analysis**: Combines traditional DOM analysis with vision-powered screenshot analysis
-- **User Flow Integration**: Records and analyzes successful user interactions to generate more realistic tests
-- **Site-Wide Testing**: Crawls entire websites and generates cohesive test suites
-- **Visual Analysis**: Uses GPT-4o-mini's vision capabilities to analyze page layouts and visual elements
-- **Adaptive Test Generation**: Tailors tests to specific page types (login, form, landing, etc.)
-- **Flexible Output**: Generates tests in Cucumber format with Java implementations (extensible to other languages)
-- **Comprehensive Test Generation**: Uses detailed prompts with examples and best practices for high-quality test scripts
+## Features
+- Crawls all pages of a web app (including dynamic navigation, menus, tabs, etc.) using Playwright
+- Handles login automatically if required (credentials from `.env`)
+- Captures screenshots and page data for every page
+- Uses LLM to analyze pages, detect login, and generate smoke test scripts
+- **Generates both Gherkin feature files and Selenium automation scripts in Java by default**
+- Optionally generates automation scripts for other frameworks (Playwright, Cypress, etc.) and languages (JS, Python, etc.)
+- Minimal setup, works with most web apps (including ASPX, React, etc.)
 
 ## Installation
 
-1. Clone the repository:
+1. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   playwright install
+   ```
 
-```bash
-git clone https://github.com/yourusername/llm_smoke_test_framework.git
-cd llm_smoke_test_framework
-```
-
-2. Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-3. Configure environment variables (create a `.env` file):
-
-```bash
-OPENAI_API_KEY=your_openai_api_key
-CHROME_DRIVER_PATH=/path/to/chromedriver  # Optional
-OUTPUT_DIR=output  # Default output directory
-```
+2. **Set up your `.env` file:**
+   ```env
+   OPENAI_API_KEY=your-openai-key
+   USERNAME=your-login-username
+   PASSWORD=your-login-password
+   # Add any other credentials as needed
+   ```
 
 ## Usage
 
-### Vision-Enhanced End-to-End Process
-
-Analyze a page with vision capabilities and generate tests:
+Run the framework from the command line:
 
 ```bash
-python run.py vision-e2e https://example.com/login --language java
+python run.py vision-e2e <website_url> [--page-only | --site] [--max-pages N]
 ```
 
-### Process a Captured User Flow
+### Options
+- `--page-only` : Only generate a test for the initial page (no crawling)
+- `--site` : Crawl and generate tests for the entire site (default)
+- `--max-pages N` : Limit the number of pages to crawl and generate tests for (e.g., `--max-pages 10`)
 
-Record a user flow and generate tests based on it:
+### Examples
+- **Test only the initial page:**
+  ```bash
+  python run.py vision-e2e https://example.com --page-only
+  ```
+- **Test the entire site (default):**
+  ```bash
+  python run.py vision-e2e https://example.com --site
+  ```
+- **Test up to 10 pages:**
+  ```bash
+  python run.py vision-e2e https://example.com --max-pages 10
+  ```
 
-```bash
-python run.py vision-e2e https://example.com/login --with-flow user_flows/login_flow.txt
+- The framework will:
+  1. Launch a browser and visit the URL
+  2. Take a screenshot and extract page data
+  3. Ask the LLM if the page is a login page
+  4. If login is required, it will log in using `.env` credentials
+  5. Recursively crawl all pages, including those behind navigation menus, tabs, and dynamic elements
+  6. For each page, capture a screenshot, extract data, and generate:
+     - a Gherkin feature file (`.feature`)
+     - a Selenium automation script in Java (`.java`)
+     - (optionally) scripts for other frameworks/languages if specified
+  7. Save all results (screenshots, data, test scripts) to the output directory
+
+### Customizing Script Generation
+
+By default, the framework generates Selenium scripts in Java. To generate scripts for other frameworks/languages (e.g., Playwright in JS, Cypress, etc.), update your call to the LLM analyzer:
+
+```python
+# Example: Generate Playwright script in JS
+llm_analyzer.generate_test_script(page_analysis, framework="playwright", language="js")
 ```
 
-### Site-Wide Test Generation
+## Output
+- Screenshots: `output/screenshots/`
+- Page data: `output/page_data/`
+- Test scripts:
+  - Gherkin feature files: `output/tests/*_smoketest.feature`
+  - Selenium Java scripts: `output/tests/*_smoketest.java`
+  - (Other frameworks/languages as requested)
 
-Crawl and generate tests for an entire website (limited to max pages):
+## Supported Applications
+- Works with most web applications, including:
+  - ASPX/.NET
+  - React, Angular, Vue
+  - Traditional server-rendered sites
+  - Sites with dynamic navigation/menus
 
-```bash
-python run.py vision-e2e https://example.com --site --max-pages 10
-```
-
-### Command Options
-
-- `vision`: Analyze a page with vision capabilities
-- `vision-e2e`: End-to-end process using vision capabilities
-- `crawl`: Extract page data only
-- `analyze`: Analyze pre-extracted page data
-- `generate`: Generate tests from analysis
-- `e2e`: Complete end-to-end process without vision
-- `sitemap`: Work with pre-generated sitemaps
-
-## User Flow Features
-
-The framework can now process complex user interactions beyond just credentials. Supported interactions:
-
-- Click actions (`click button`)
-- Text input (`type text into field`)
-- Selections (`select option from dropdown`)
-- And more interaction types
-
-These interactions are recorded and used to generate more realistic test scripts that replicate actual user behavior.
-
-## Architecture
-
-The framework consists of several core components:
-
-- **WebCrawler**: Extracts page data and captures screenshots
-- **LLMAnalyzer**: Analyzes pages using OpenAI models with both text and vision capabilities
-- **TestGenerator**: Generates test scripts from analysis results
-- **SitemapCrawler**: Discovers and maps website structure
-
-## Config Options
-
-Configuration is handled through the `Config` class and environment variables:
-
-- `OPENAI_API_KEY`: Your OpenAI API key
-- `LLM_MODEL`: Model to use (default: "gpt-4o-mini")
-- `CHROME_DRIVER_PATH`: Optional path to ChromeDriver
-- `OUTPUT_DIR`: Directory for output files
-- `SCREENSHOT_MAX_DIMENSION`: Max screenshot dimension for vision analysis
-- `SCREENSHOT_QUALITY`: JPEG quality for screenshots
-
-## Output Structure
-
-Generated files are organized differently based on whether you're processing a single page or an entire site:
-
-### Single Page Mode (default)
-
-```
-output/
-├── analysis/           # Analysis results
-├── page_data/          # Extracted page data
-├── screenshots/        # Captured screenshots
-└── test_scripts/       # Generated test scripts
-    ├── login/          # Scripts organized by page type
-    ├── form/
-    └── landing/
-```
-
-### Site-Wide Mode (when using --site flag)
-
-```
-output/
-├── site_e2e_example.com_20250320_124255/      # Site-specific directory with timestamp
-│   ├── analysis/                              # Site-specific analysis results
-│   ├── page_data/                             # Site-specific extracted page data
-│   ├── screenshots/                           # Site-specific screenshots
-│   ├── test_scripts/                          # Site-specific test scripts
-│   │   └── batch_1/                           # Test scripts organized in batches
-│   │       ├── login/                         # Scripts organized by page type
-│   │       ├── form/                          # Scripts organized by page type
-│   │       └── landing/                       # Scripts organized by page type
-│   └── sitemap.json                           # Site structure information
-└── another_site_e2e_example2.com_20250320_125045/  # Another site analysis
-    ├── ...
-```
-
-This organization helps keep tests for different sites separate and makes it easier to manage multiple test generation runs.
-
-## Recent Updates
-
-- **Enhanced Test Generation Prompts**: Improved test generation with comprehensive prompts including examples, guidelines, and best practices
-- **Robust JSON Parsing**: Added better error handling and recovery for JSON parsing during test generation
-- **Enhanced User Flow Analysis**: Now extracts and uses all types of interactions, not just login credentials
-- **Fixed Test Generation**: Resolved prompt formatting issue for reliable test generation
-- **Improved Vision Analysis**: Better integration of DOM and vision-based analysis
-- **Site-Wide Processing**: Added support for crawling and analyzing entire websites
-- **Optimized Screenshot Handling**: Better image optimization for vision analysis
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+## Extending
+- Add more credentials to `.env` as needed
+- Customize LLM prompts in `core/llm_analyzer.py`
+- Change the default script framework/language by passing parameters to `generate_test_script`
 
 ## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT
